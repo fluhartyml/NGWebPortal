@@ -16,12 +16,13 @@ struct ServerView: View {
             // Status indicator
             HStack(spacing: 15) {
                 Circle()
-                    .fill(server.isRunning ? Color.green : Color.gray)
+                    .fill(server.isRunning ? Color.green : Color.red)
                     .frame(width: 20, height: 20)
                 
                 Text(server.isRunning ? "Server Running" : "Server Stopped")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .foregroundColor(server.isRunning ? .primary : .blue)
             }
             
             // Server URL (when running)
@@ -40,22 +41,29 @@ struct ServerView: View {
             }
             
             // Control buttons
-            HStack(spacing: 20) {
+            VStack(spacing: 15) {
                 if server.isRunning {
-                    Button("Stop Server") {
-                        Task {
-                            await server.stop()
+                    HStack(spacing: 20) {
+                        Button("Stop Server") {
+                            Task {
+                                await server.stop()
+                            }
                         }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        
+                        Button("View My Site") {
+                            if let url = URL(string: server.serverURL) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
                     
-                    Button("View My Site") {
-                        if let url = URL(string: server.serverURL) {
-                            NSWorkspace.shared.open(url)
-                        }
+                    Button("Open Site Folder") {
+                        SiteManager.shared.openSiteFolder()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                 } else {
                     Button("Start Server") {
                         Task {
@@ -64,6 +72,11 @@ struct ServerView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
+                    
+                    Button("Open Site Folder") {
+                        SiteManager.shared.openSiteFolder()
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
             
