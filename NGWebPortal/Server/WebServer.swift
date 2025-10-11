@@ -2,108 +2,146 @@
 //  WebServer.swift
 //  NGWebPortal
 //
-//  Hummingbird web server wrapper and HTTP routing
+//  Hummingbird web server serving site files
 //
 
 import Foundation
 import Hummingbird
+import Observation
 
 @Observable
 class WebServer {
-    var isRunning: Bool = false
-    var port: Int = 8080
-    var errorMessage: String = ""
+    private var serverTask: Task<Void, Never>?
+    var isRunning = false
+    var serverURL = "http://127.0.0.1:8080"
+    var errorMessage = ""
     
-    private var serverTask: Task<Void, Error>?
+    init() {
+        // Initialize site folder structure
+        try? SiteManager.shared.initializeSiteFolder()
+    }
     
-    init() {}
+    // Serve static files from site folder
+    func serveStaticFile(request: Request, context: some RequestContext) async throws -> Response {
+        let path = request.uri.path
+        let siteFolder = SiteManager.shared.siteFolder
+        
+        // Determine file path
+        let filePath: URL
+        if path == "/" {
+            filePath = siteFolder.appendingPathComponent("index.html")
+        } else if path.hasSuffix("/") {
+            // Directory request - look for index.html
+            filePath = siteFolder.appendingPathComponent(path).appendingPathComponent("index.html")
+        } else {
+            filePath = siteFolder.appendingPathComponent(path)
+        }
+        
+        // Check if file exists
+        guard FileManager.default.fileExists(atPath: filePath.path) else {
+            let notFoundHTML = """
+                <!DOCTYPE html>
+                <html>
+                <head><title>404 Not Found</title></head>
+                <body>
+                    <h1>404 - Page Not Found</h1>
+                    <p>The requested file was not found: \(path)</p>
+                    <p><a href="/">Return to home</a></p>
+                </body>
+                </html>
+                """
+            return Response(
+                status: .notFound,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: notFoundHTML))
+            )
+        }
+        
+        // Read file contents
+        guard let fileContents = try? String(contentsOf: filePath, encoding: .utf8) else {
+            return Response(
+                status: .internalServerError,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: "Error reading file"))
+            )
+        }
+        
+        // Determine content type
+        let contentType = getContentType(for: filePath.pathExtension)
+        
+        return Response(
+            status: .ok,
+            headers: [.contentType: contentType],
+            body: .init(byteBuffer: ByteBuffer(string: fileContents))
+        )
+    }
     
-    // Start the web server
+    // Get MIME type for file extension
+    private func getContentType(for ext: String) -> String {
+        switch ext.lowercased() {
+        case "html", "htm":
+            return "text/html"
+        case "css":
+            return "text/css"
+        case "js":
+            return "application/javascript"
+        case "json":
+            return "application/json"
+        case "png":
+            return "image/png"
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        case "gif":
+            return "image/gif"
+        case "svg":
+            return "image/svg+xml"
+        case "ico":
+            return "image/x-icon"
+        case "txt":
+            return "text/plain"
+        default:
+            return "application/octet-stream"
+        }
+    }
+    
     func start() async throws {
         guard !isRunning else { return }
         
-        do {
-            // Create router
-            let router = Router()
-            
-            // Define routes
-            router.get("/") { _, _ in
-                return Response(
-                    status: .ok,
-                    headers: [:],
-                    body: .init(byteBuffer: ByteBuffer(string: "<h1>NG Web Portal</h1><p>Server is running!</p>"))
-                )
-            }
-            
-            router.get("/about") { _, _ in
-                return Response(
-                    status: .ok,
-                    headers: [:],
-                    body: .init(byteBuffer: ByteBuffer(string: "<h1>About</h1><p>About page coming soon</p>"))
-                )
-            }
-            
-            router.get("/blog") { _, _ in
-                return Response(
-                    status: .ok,
-                    headers: [:],
-                    body: .init(byteBuffer: ByteBuffer(string: "<h1>Blog</h1><p>Blog posts coming soon</p>"))
-                )
-            }
-            
-            router.get("/portfolio") { _, _ in
-                return Response(
-                    status: .ok,
-                    headers: [:],
-                    body: .init(byteBuffer: ByteBuffer(string: "<h1>Portfolio</h1><p>Portfolio projects coming soon</p>"))
-                )
-            }
-            
-            // Create application
-            let app = Application(
-                router: router,
-                configuration: .init(
-                    address: .hostname("127.0.0.1", port: port),
-                    serverName: "NG Web Portal"
-                )
+        errorMessage = ""
+        
+        let router = Router()
+        router.get("*", use: serveStaticFile)
+        
+        let app = Application(
+            router: router,
+            configuration: .init(
+                address: .hostname("127.0.0.1", port: 8080)
             )
-            
-            // Start server in background task
-            serverTask = Task {
+        )
+        
+        isRunning = true
+        
+        print("🚀 NG Web Portal starting on http://127.0.0.1:8080")
+        print("📁 Serving files from: \(SiteManager.shared.siteFolder.path)")
+        
+        serverTask = Task {
+            do {
                 try await app.run()
+            } catch {
+                print("❌ Server error: \(error)")
+                await MainActor.run {
+                    self.errorMessage = "Server error: \(error.localizedDescription)"
+                    self.isRunning = false
+                }
             }
-            
-            // Give server a moment to start
-            try await Task.sleep(for: .milliseconds(500))
-            
-            await MainActor.run {
-                self.isRunning = true
-                self.errorMessage = ""
-            }
-            
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "Failed to start server: \(error.localizedDescription)"
-                self.isRunning = false
-            }
-            throw error
         }
     }
     
-    // Stop the web server
     func stop() async {
-        guard isRunning else { return }
-        
+        isRunning = false
+        errorMessage = ""
         serverTask?.cancel()
         serverTask = nil
-        
-        await MainActor.run {
-            self.isRunning = false
-        }
-    }
-    
-    // Get server URL
-    var serverURL: String {
-        return "http://localhost:\(port)"
+        print("🛑 Server stopped")
     }
 }
