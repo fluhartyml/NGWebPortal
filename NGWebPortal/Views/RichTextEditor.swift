@@ -27,7 +27,7 @@ struct RichTextEditor: NSViewRepresentable {
         
         // Load initial HTML content
         if !html.isEmpty {
-            if let attributedString = htmlToAttributedString(html) {
+            if let attributedString = Self.htmlToAttributedString(html) {
                 textView.textStorage?.setAttributedString(attributedString)
             }
         }
@@ -39,7 +39,7 @@ struct RichTextEditor: NSViewRepresentable {
         // Only update if coordinator indicates external change
         if context.coordinator.needsUpdate {
             if let textView = nsView.documentView as? NSTextView {
-                if let attributedString = htmlToAttributedString(html) {
+                if let attributedString = Self.htmlToAttributedString(html) {
                     textView.textStorage?.setAttributedString(attributedString)
                 }
             }
@@ -63,14 +63,14 @@ struct RichTextEditor: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             
             // Convert attributed string to HTML
-            if let attributedString = textView.attributedString() as? NSAttributedString {
-                parent.html = attributedStringToHTML(attributedString)
+            if let storage = textView.textStorage {
+                parent.html = RichTextEditor.attributedStringToHTML(storage)
             }
         }
     }
     
     // Convert HTML string to NSAttributedString
-    private func htmlToAttributedString(_ html: String) -> NSAttributedString? {
+    private static func htmlToAttributedString(_ html: String) -> NSAttributedString? {
         guard let data = html.data(using: .utf8) else { return nil }
         
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
@@ -82,7 +82,7 @@ struct RichTextEditor: NSViewRepresentable {
     }
     
     // Convert NSAttributedString to HTML string
-    private func attributedStringToHTML(_ attributedString: NSAttributedString) -> String {
+    private static func attributedStringToHTML(_ attributedString: NSAttributedString) -> String {
         let documentAttributes: [NSAttributedString.DocumentAttributeKey: Any] = [
             .documentType: NSAttributedString.DocumentType.html,
             .characterEncoding: String.Encoding.utf8.rawValue
@@ -159,26 +159,29 @@ struct RichTextToolbar: View {
     }
     
     private func toggleUnderline() {
-        guard let textView = textView else { return }
-        if let range = textView.selectedRanges.first?.rangeValue {
-            textView.textStorage?.addAttribute(
-                .underlineStyle,
-                value: NSUnderlineStyle.single.rawValue,
-                range: range
-            )
-        }
+        guard let textView = textView,
+              let range = textView.selectedRanges.first?.rangeValue,
+              let storage = textView.textStorage else { return }
+        
+        storage.addAttribute(
+            .underlineStyle,
+            value: NSUnderlineStyle.single.rawValue,
+            range: range
+        )
     }
     
     private func insertLink() {
         // Simple link insertion - could be enhanced with dialog
-        guard let textView = textView else { return }
+        guard let textView = textView,
+              let storage = textView.textStorage else { return }
+        
         let linkText = "Link"
         let url = "https://example.com"
         
         let attributedString = NSMutableAttributedString(string: linkText)
         attributedString.addAttribute(.link, value: url, range: NSRange(location: 0, length: linkText.count))
         
-        textView.textStorage?.insert(attributedString, at: textView.selectedRange().location)
+        storage.insert(attributedString, at: textView.selectedRange().location)
     }
 }
 

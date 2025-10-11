@@ -6,6 +6,14 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C0C956EF2E9AE53F00BB33DC /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = C0C956EE2E9AE53F00BB33DC /* Hummingbird */; };
+		C0C956F12E9AE53F00BB33DC /* HummingbirdCore in Frameworks */ = {isa = PBXBuildFile; productRef = C0C956F02E9AE53F00BB33DC /* HummingbirdCore */; };
+		C0C956F32E9AE53F00BB33DC /* HummingbirdHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = C0C956F22E9AE53F00BB33DC /* HummingbirdHTTP2 */; };
+		C0C956F52E9AE53F00BB33DC /* HummingbirdRouter in Frameworks */ = {isa = PBXBuildFile; productRef = C0C956F42E9AE53F00BB33DC /* HummingbirdRouter */; };
+		C0C956F72E9AE53F00BB33DC /* HummingbirdTLS in Frameworks */ = {isa = PBXBuildFile; productRef = C0C956F62E9AE53F00BB33DC /* HummingbirdTLS */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		C0C956AD2E9AC52A00BB33DC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +60,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0C956F52E9AE53F00BB33DC /* HummingbirdRouter in Frameworks */,
+				C0C956F12E9AE53F00BB33DC /* HummingbirdCore in Frameworks */,
+				C0C956F32E9AE53F00BB33DC /* HummingbirdHTTP2 in Frameworks */,
+				C0C956EF2E9AE53F00BB33DC /* Hummingbird in Frameworks */,
+				C0C956F72E9AE53F00BB33DC /* HummingbirdTLS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +125,11 @@
 			);
 			name = NGWebPortal;
 			packageProductDependencies = (
+				C0C956EE2E9AE53F00BB33DC /* Hummingbird */,
+				C0C956F02E9AE53F00BB33DC /* HummingbirdCore */,
+				C0C956F22E9AE53F00BB33DC /* HummingbirdHTTP2 */,
+				C0C956F42E9AE53F00BB33DC /* HummingbirdRouter */,
+				C0C956F62E9AE53F00BB33DC /* HummingbirdTLS */,
 			);
 			productName = NGWebPortal;
 			productReference = C0C9569D2E9AC52800BB33DC /* NGWebPortal.app */;
@@ -195,6 +213,9 @@
 			);
 			mainGroup = C0C956942E9AC52800BB33DC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C0C9569E2E9AC52800BB33DC /* Products */;
 			projectDirPath = "";
@@ -408,7 +429,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.NightGard.NGWebPortal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -440,7 +461,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.NightGard.NGWebPortal;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -573,6 +594,45 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hummingbird-project/hummingbird";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.16.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0C956EE2E9AE53F00BB33DC /* Hummingbird */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = Hummingbird;
+		};
+		C0C956F02E9AE53F00BB33DC /* HummingbirdCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = HummingbirdCore;
+		};
+		C0C956F22E9AE53F00BB33DC /* HummingbirdHTTP2 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = HummingbirdHTTP2;
+		};
+		C0C956F42E9AE53F00BB33DC /* HummingbirdRouter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = HummingbirdRouter;
+		};
+		C0C956F62E9AE53F00BB33DC /* HummingbirdTLS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0C956ED2E9AE53F00BB33DC /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = HummingbirdTLS;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C0C956952E9AC52800BB33DC /* Project object */;
 }

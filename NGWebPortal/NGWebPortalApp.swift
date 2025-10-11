@@ -12,7 +12,9 @@ import SwiftData
 struct NGWebPortalApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            SiteSettings.self,
+            BlogPost.self,
+            PortfolioProject.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

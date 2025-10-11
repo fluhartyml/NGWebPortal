@@ -14,8 +14,7 @@ class WebServer {
     var port: Int = 8080
     var errorMessage: String = ""
     
-    private var application: Application?
-    private var serviceGroup: ServiceGroup?
+    private var serverTask: Task<Void, Error>?
     
     init() {}
     
@@ -28,43 +27,50 @@ class WebServer {
             let router = Router()
             
             // Define routes
-            router.get("/") { request, context in
-                return Response(status: .ok, body: .init(string: "<h1>NG Web Portal</h1><p>Server is running!</p>"))
+            router.get("/") { _, _ in
+                return Response(
+                    status: .ok,
+                    headers: [:],
+                    body: .init(byteBuffer: ByteBuffer(string: "<h1>NG Web Portal</h1><p>Server is running!</p>"))
+                )
             }
             
-            router.get("/about") { request, context in
-                return Response(status: .ok, body: .init(string: "<h1>About</h1><p>About page coming soon</p>"))
+            router.get("/about") { _, _ in
+                return Response(
+                    status: .ok,
+                    headers: [:],
+                    body: .init(byteBuffer: ByteBuffer(string: "<h1>About</h1><p>About page coming soon</p>"))
+                )
             }
             
-            router.get("/blog") { request, context in
-                return Response(status: .ok, body: .init(string: "<h1>Blog</h1><p>Blog posts coming soon</p>"))
+            router.get("/blog") { _, _ in
+                return Response(
+                    status: .ok,
+                    headers: [:],
+                    body: .init(byteBuffer: ByteBuffer(string: "<h1>Blog</h1><p>Blog posts coming soon</p>"))
+                )
             }
             
-            router.get("/portfolio") { request, context in
-                return Response(status: .ok, body: .init(string: "<h1>Portfolio</h1><p>Portfolio projects coming soon</p>"))
+            router.get("/portfolio") { _, _ in
+                return Response(
+                    status: .ok,
+                    headers: [:],
+                    body: .init(byteBuffer: ByteBuffer(string: "<h1>Portfolio</h1><p>Portfolio projects coming soon</p>"))
+                )
             }
             
             // Create application
             let app = Application(
                 router: router,
-                configuration: .init(address: .hostname("127.0.0.1", port: port))
-            )
-            
-            self.application = app
-            
-            // Run server in background
-            let serviceGroup = ServiceGroup(
                 configuration: .init(
-                    services: [app],
-                    gracefulShutdownSignals: [.sigterm, .sigint],
-                    logger: app.logger
+                    address: .hostname("127.0.0.1", port: port),
+                    serverName: "NG Web Portal"
                 )
             )
             
-            self.serviceGroup = serviceGroup
-            
-            Task {
-                try await serviceGroup.run()
+            // Start server in background task
+            serverTask = Task {
+                try await app.run()
             }
             
             // Give server a moment to start
@@ -88,12 +94,11 @@ class WebServer {
     func stop() async {
         guard isRunning else { return }
         
-        await serviceGroup?.triggerGracefulShutdown()
+        serverTask?.cancel()
+        serverTask = nil
         
         await MainActor.run {
             self.isRunning = false
-            self.application = nil
-            self.serviceGroup = nil
         }
     }
     
