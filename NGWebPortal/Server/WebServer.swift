@@ -17,28 +17,42 @@ class WebServer {
     var errorMessage = ""
     
     init() {
-        // Initialize site folder structure
-        try? SiteManager.shared.initializeSiteFolder()
+        // Initialize site folder structure and capture errors
+        do {
+            try SiteManager.shared.initializeSiteFolder()
+            print("✅ Site folder initialized successfully")
+        } catch {
+            errorMessage = "Failed to initialize site folder: \(error.localizedDescription)"
+            print("❌ Site folder initialization error: \(error)")
+        }
     }
     
     // Serve static files from site folder
-    func serveStaticFile(request: Request, context: some RequestContext) async throws -> Response {
+    @Sendable func serveStaticFile(request: Request, context: some RequestContext) async throws -> Response {
         let path = request.uri.path
         let siteFolder = SiteManager.shared.siteFolder
         
+        print("📥 Request for: \(path)")
+        
         // Determine file path
         let filePath: URL
-        if path == "/" {
+        if path == "/" || path == "" {
             filePath = siteFolder.appendingPathComponent("index.html")
         } else if path.hasSuffix("/") {
             // Directory request - look for index.html
-            filePath = siteFolder.appendingPathComponent(path).appendingPathComponent("index.html")
+            let cleanPath = String(path.dropLast())
+            filePath = siteFolder.appendingPathComponent(cleanPath).appendingPathComponent("index.html")
         } else {
-            filePath = siteFolder.appendingPathComponent(path)
+            // Remove leading slash
+            let cleanPath = path.hasPrefix("/") ? String(path.dropFirst()) : path
+            filePath = siteFolder.appendingPathComponent(cleanPath)
         }
+        
+        print("📂 Looking for file at: \(filePath.path)")
         
         // Check if file exists
         guard FileManager.default.fileExists(atPath: filePath.path) else {
+            print("❌ File not found: \(filePath.path)")
             let notFoundHTML = """
                 <!DOCTYPE html>
                 <html>
@@ -46,6 +60,7 @@ class WebServer {
                 <body>
                     <h1>404 - Page Not Found</h1>
                     <p>The requested file was not found: \(path)</p>
+                    <p>Looking for: \(filePath.path)</p>
                     <p><a href="/">Return to home</a></p>
                 </body>
                 </html>
@@ -57,8 +72,11 @@ class WebServer {
             )
         }
         
+        print("✅ File found, reading contents...")
+        
         // Read file contents
         guard let fileContents = try? String(contentsOf: filePath, encoding: .utf8) else {
+            print("❌ Error reading file")
             return Response(
                 status: .internalServerError,
                 headers: [.contentType: "text/html"],
@@ -68,6 +86,8 @@ class WebServer {
         
         // Determine content type
         let contentType = getContentType(for: filePath.pathExtension)
+        
+        print("✅ Serving file with content-type: \(contentType)")
         
         return Response(
             status: .ok,
@@ -110,7 +130,16 @@ class WebServer {
         errorMessage = ""
         
         let router = Router()
-        router.get("*", use: serveStaticFile)
+        
+        // Add explicit routes
+        router.get("/", use: serveStaticFile)
+        router.get("/about.html", use: serveStaticFile)
+        router.get("/blog/", use: serveStaticFile)
+        router.get("/portfolio/", use: serveStaticFile)
+        router.get("/css/style.css", use: serveStaticFile)
+        
+        // Catch-all for other files
+        router.get("**", use: serveStaticFile)
         
         let app = Application(
             router: router,
