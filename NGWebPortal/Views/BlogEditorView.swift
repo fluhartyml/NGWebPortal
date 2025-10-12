@@ -15,6 +15,7 @@ struct BlogEditorView: View {
     
     @State private var selectedPost: BlogPost?
     @State private var isCreatingNew = false
+    @State private var isPublishingAll = false
     
     var body: some View {
         HSplitView {
@@ -24,6 +25,13 @@ struct BlogEditorView: View {
                     Text("Blog Posts")
                         .font(.headline)
                     Spacer()
+                    Button(action: publishAll) {
+                        Image(systemName: "arrow.up.doc")
+                        Text("Publish All")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(posts.isEmpty || isPublishingAll)
+                    
                     Button(action: createNewPost) {
                         Image(systemName: "plus")
                     }
@@ -74,40 +82,125 @@ struct BlogEditorView: View {
         modelContext.insert(newPost)
         selectedPost = newPost
     }
+    
+    private func publishAll() {
+        isPublishingAll = true
+        Task {
+            for post in posts {
+                if let siteFolder = SiteManager.shared.currentSiteFolder {
+                    do {
+                        post.isDraft = false
+                        if post.publishedDate < Date(timeIntervalSince1970: 0) {
+                            post.publishedDate = Date()
+                        }
+                        try modelContext.save()
+                        _ = try TemplateEngine.shared.generateBlogPostHTML(post: post, siteFolder: siteFolder)
+                        print("✅ Published: \(post.title)")
+                    } catch {
+                        print("❌ Failed to publish \(post.title): \(error)")
+                    }
+                }
+            }
+            isPublishingAll = false
+        }
+    }
 }
 
 // MARK: - Post List Item
 struct PostListItem: View {
     let post: BlogPost
+    @Environment(\.modelContext) private var modelContext
+    @State private var isPublishing = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(post.title.isEmpty ? "Untitled Post" : post.title)
-                .font(.headline)
-                .lineLimit(1)
-            
-            Text(post.subtitle.isEmpty ? "No subtitle" : post.subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            
-            HStack {
-                if post.isDraft {
-                    Text("Draft")
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.2))
-                        .foregroundColor(.orange)
-                        .cornerRadius(4)
-                }
-                
-                Text(post.publishedDate, style: .date)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            // Thumbnail preview
+            if let image = post.featuredImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(LinearGradient(
+                        colors: [Color(red: 0.4, green: 0.49, blue: 0.92), Color(red: 0.46, green: 0.29, blue: 0.64)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundColor(.white.opacity(0.6))
+                            .font(.title2)
+                    )
             }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(post.title.isEmpty ? "Untitled Post" : post.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                
+                Text(post.subtitle.isEmpty ? "No subtitle" : post.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                
+                HStack {
+                    if post.isDraft {
+                        Text("Draft")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.2))
+                            .foregroundColor(.orange)
+                            .cornerRadius(4)
+                    }
+                    
+                    Text(post.publishedDate, style: .date)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            // Publish button
+            Button(action: { publishPost() }) {
+                if isPublishing {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: "arrow.up.doc.fill")
+                        .foregroundColor(.blue)
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Publish this post")
+            .disabled(isPublishing)
         }
         .padding(.vertical, 4)
+    }
+    
+    private func publishPost() {
+        guard let siteFolder = SiteManager.shared.currentSiteFolder else { return }
+        
+        isPublishing = true
+        Task {
+            do {
+                post.isDraft = false
+                if post.publishedDate < Date(timeIntervalSince1970: 0) {
+                    post.publishedDate = Date()
+                }
+                try modelContext.save()
+                _ = try TemplateEngine.shared.generateBlogPostHTML(post: post, siteFolder: siteFolder)
+                print("✅ Published: \(post.title)")
+            } catch {
+                print("❌ Failed to publish: \(error)")
+            }
+            isPublishing = false
+        }
     }
 }
 
