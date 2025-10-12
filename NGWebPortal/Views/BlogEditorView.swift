@@ -90,6 +90,19 @@ struct BlogEditorView: View {
         Task { @MainActor in
             let templateEngine = TemplateEngine(modelContext: modelContext)
             
+            // First, save all featured images to disk
+            for post in posts {
+                if let imageData = post.featuredImageData {
+                    let imagesFolder = siteFolder.appendingPathComponent("images")
+                    try? FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
+                    
+                    let imageFilename = "featured-\(post.id.uuidString).jpg"
+                    let imageURL = imagesFolder.appendingPathComponent(imageFilename)
+                    try? imageData.write(to: imageURL)
+                }
+            }
+            
+            // Then generate HTML for each post
             for post in posts {
                 do {
                     post.isDraft = false
@@ -101,7 +114,9 @@ struct BlogEditorView: View {
                     // Generate individual post HTML
                     let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: posts)
                     let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
-                    let postURL = siteFolder.appendingPathComponent("blog").appendingPathComponent("\(postFilename).html")
+                    let blogFolder = siteFolder.appendingPathComponent("blog")
+                    try? FileManager.default.createDirectory(at: blogFolder, withIntermediateDirectories: true)
+                    let postURL = blogFolder.appendingPathComponent("\(postFilename).html")
                     try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
                     
                     print("✅ Published: \(post.title)")
@@ -216,12 +231,24 @@ struct PostListItem: View {
                 }
                 try modelContext.save()
                 
+                // Save featured image to disk
+                if let imageData = post.featuredImageData {
+                    let imagesFolder = siteFolder.appendingPathComponent("images")
+                    try FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
+                    
+                    let imageFilename = "featured-\(post.id.uuidString).jpg"
+                    let imageURL = imagesFolder.appendingPathComponent(imageFilename)
+                    try imageData.write(to: imageURL)
+                }
+                
                 let templateEngine = TemplateEngine(modelContext: modelContext)
                 
                 // Generate individual post HTML
                 let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: allPosts)
                 let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
-                let postURL = siteFolder.appendingPathComponent("blog").appendingPathComponent("\(postFilename).html")
+                let blogFolder = siteFolder.appendingPathComponent("blog")
+                try FileManager.default.createDirectory(at: blogFolder, withIntermediateDirectories: true)
+                let postURL = blogFolder.appendingPathComponent("\(postFilename).html")
                 try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
                 
                 // Update blog list page
@@ -440,12 +467,24 @@ struct PostEditorForm: View {
             ])
         }
         
+        // Save featured image to disk
+        if let imageData = post.featuredImageData {
+            let imagesFolder = siteFolder.appendingPathComponent("images")
+            try FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
+            
+            let imageFilename = "featured-\(post.id.uuidString).jpg"
+            let imageURL = imagesFolder.appendingPathComponent(imageFilename)
+            try imageData.write(to: imageURL)
+        }
+        
         let templateEngine = TemplateEngine(modelContext: modelContext)
         
         // Generate individual post HTML
         let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: allPosts)
         let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
-        let postURL = siteFolder.appendingPathComponent("blog").appendingPathComponent("\(postFilename).html")
+        let blogFolder = siteFolder.appendingPathComponent("blog")
+        try FileManager.default.createDirectory(at: blogFolder, withIntermediateDirectories: true)
+        let postURL = blogFolder.appendingPathComponent("\(postFilename).html")
         try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
         
         // Update blog list page

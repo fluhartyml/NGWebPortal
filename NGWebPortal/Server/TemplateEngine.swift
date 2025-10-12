@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import AppKit
 
 @MainActor
 class TemplateEngine {
@@ -21,6 +22,29 @@ class TemplateEngine {
         return try? modelContext.fetch(descriptor).first
     }
     
+    // MARK: - Save Featured Image to Disk
+    
+    private func saveFeaturedImage(for post: BlogPost, to siteFolder: URL) -> String? {
+        guard let imageData = post.featuredImageData else { return nil }
+        
+        // Create images directory if it doesn't exist
+        let imagesFolder = siteFolder.appendingPathComponent("images")
+        try? FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
+        
+        // Generate unique filename based on post
+        let imageFilename = "featured-\(post.id.uuidString).jpg"
+        let imageURL = imagesFolder.appendingPathComponent(imageFilename)
+        
+        // Save image to disk
+        do {
+            try imageData.write(to: imageURL)
+            return "images/\(imageFilename)"
+        } catch {
+            print("❌ Failed to save featured image: \(error)")
+            return nil
+        }
+    }
+    
     // MARK: - Blog List Page
     
     func generateBlogListHTML(posts: [BlogPost]) -> String {
@@ -30,11 +54,10 @@ class TemplateEngine {
         
         let postsHTML = posts.map { post in
             let featuredImageHTML: String
-            if let imageData = post.featuredImageData,
-               let base64String = imageData.base64EncodedString() as String? {
+            if let imagePath = post.featuredImageData != nil ? "images/featured-\(post.id.uuidString).jpg" : nil {
                 featuredImageHTML = """
                 <div class="post-thumbnail">
-                    <img src="data:image/jpeg;base64,\(base64String)" alt="\(post.title)">
+                    <img src="\(imagePath)" alt="\(post.title)">
                 </div>
                 """
             } else {
@@ -45,8 +68,8 @@ class TemplateEngine {
                 """
             }
             
-            // Create excerpt from content (first 200 characters)
-            let excerpt = String(post.content.prefix(200)) + "..."
+            // Create excerpt from subtitle or content
+            let excerpt = !post.subtitle.isEmpty ? post.subtitle : String(post.content.prefix(200))
             
             // Generate slug from filename (remove .html extension)
             let slug = post.filename.replacingOccurrences(of: ".html", with: "")
@@ -134,10 +157,11 @@ class TemplateEngine {
                 .post-thumbnail,
                 .post-thumbnail-placeholder {
                     width: 300px;
-                    height: 200px;
                     flex-shrink: 0;
                     overflow: hidden;
                     background: #e0e0e0;
+                    display: flex;
+                    align-items: center;
                 }
                 
                 .post-thumbnail img {
@@ -147,8 +171,6 @@ class TemplateEngine {
                 }
                 
                 .post-thumbnail-placeholder {
-                    display: flex;
-                    align-items: center;
                     justify-content: center;
                     color: #999;
                     font-size: 0.9em;
@@ -157,6 +179,8 @@ class TemplateEngine {
                 .post-content {
                     padding: 30px;
                     flex: 1;
+                    display: flex;
+                    flex-direction: column;
                 }
                 
                 .post-content h2 {
@@ -184,6 +208,7 @@ class TemplateEngine {
                 .post-excerpt {
                     color: #555;
                     line-height: 1.8;
+                    flex: 1;
                 }
                 
                 @media (max-width: 768px) {
@@ -239,11 +264,11 @@ class TemplateEngine {
     
     private func generateBlogPostHTML(post: BlogPost, previousPost: BlogPost?, nextPost: BlogPost?, blogTitle: String) -> String {
         let featuredImageHTML: String
-        if let imageData = post.featuredImageData,
-           let base64String = imageData.base64EncodedString() as String? {
+        if post.featuredImageData != nil {
+            let imagePath = "images/featured-\(post.id.uuidString).jpg"
             featuredImageHTML = """
             <div class="featured-image">
-                <img src="data:image/jpeg;base64,\(base64String)" alt="\(post.title)">
+                <img src="../\(imagePath)" alt="\(post.title)">
             </div>
             """
         } else {
@@ -307,15 +332,31 @@ class TemplateEngine {
                 }
                 
                 .back-link {
-                    display: inline-block;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
                     color: #007AFF;
                     text-decoration: none;
                     margin-bottom: 30px;
                     font-size: 0.95em;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    transition: background 0.2s;
                 }
                 
                 .back-link:hover {
-                    text-decoration: underline;
+                    background: #f0f0f0;
+                }
+                
+                .back-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                
+                .back-icon svg {
+                    width: 16px;
+                    height: 16px;
                 }
                 
                 article {
@@ -360,56 +401,6 @@ class TemplateEngine {
                 
                 .post-content p {
                     margin-bottom: 1.5em;
-                }
-                
-                .post-content h2 {
-                    font-size: 1.8em;
-                    margin: 1.5em 0 0.5em;
-                    color: #1a1a1a;
-                }
-                
-                .post-content h3 {
-                    font-size: 1.4em;
-                    margin: 1.3em 0 0.5em;
-                    color: #1a1a1a;
-                }
-                
-                .post-content ul, .post-content ol {
-                    margin-bottom: 1.5em;
-                    padding-left: 2em;
-                }
-                
-                .post-content li {
-                    margin-bottom: 0.5em;
-                }
-                
-                .post-content blockquote {
-                    border-left: 4px solid #007AFF;
-                    padding-left: 20px;
-                    margin: 1.5em 0;
-                    color: #555;
-                    font-style: italic;
-                }
-                
-                .post-content code {
-                    background: #f5f5f5;
-                    padding: 2px 6px;
-                    border-radius: 3px;
-                    font-family: "SF Mono", Monaco, monospace;
-                    font-size: 0.9em;
-                }
-                
-                .post-content pre {
-                    background: #f5f5f5;
-                    padding: 20px;
-                    border-radius: 8px;
-                    overflow-x: auto;
-                    margin-bottom: 1.5em;
-                }
-                
-                .post-content pre code {
-                    background: none;
-                    padding: 0;
                 }
                 
                 .post-navigation {
@@ -483,7 +474,20 @@ class TemplateEngine {
         </head>
         <body>
             <div class="container">
-                <a href="../blog.html" class="back-link">← Back to Home</a>
+                <a href="../blog.html" class="back-link">
+                    <span class="back-icon">
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M10 2L4 8l6 6"/>
+                        </svg>
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                            <rect x="2" y="3" width="4" height="3" rx="1"/>
+                            <rect x="2" y="7" width="8" height="1" rx="0.5"/>
+                            <rect x="2" y="9" width="8" height="1" rx="0.5"/>
+                            <rect x="2" y="11" width="8" height="1" rx="0.5"/>
+                        </svg>
+                    </span>
+                    Back to List
+                </a>
                 
                 <article>
                     \(featuredImageHTML)

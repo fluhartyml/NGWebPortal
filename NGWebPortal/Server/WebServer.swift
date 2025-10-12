@@ -8,6 +8,7 @@
 import Foundation
 import Hummingbird
 import Observation
+internal import NIOFoundationCompat
 
 @Observable
 class WebServer {
@@ -81,9 +82,36 @@ class WebServer {
         
         print("✅ File found, reading contents...")
         
-        // Read file contents
+        // Determine content type
+        let contentType = getContentType(for: filePath.pathExtension)
+        let ext = filePath.pathExtension.lowercased()
+        
+        // Read binary data for images and other binary files
+        if ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "gif" || ext == "ico" {
+            guard let fileData = try? Data(contentsOf: filePath) else {
+                print("❌ Error reading binary file")
+                return Response(
+                    status: .internalServerError,
+                    headers: [.contentType: "text/html"],
+                    body: .init(byteBuffer: ByteBuffer(string: "Error reading file"))
+                )
+            }
+            
+            print("✅ Serving binary file (\(fileData.count) bytes) with content-type: \(contentType)")
+            
+            var buffer = ByteBuffer()
+            buffer.writeData(fileData)
+            
+            return Response(
+                status: .ok,
+                headers: [.contentType: contentType],
+                body: .init(byteBuffer: buffer)
+            )
+        }
+        
+        // Read text files as UTF-8 strings
         guard let fileContents = try? String(contentsOf: filePath, encoding: .utf8) else {
-            print("❌ Error reading file")
+            print("❌ Error reading text file")
             return Response(
                 status: .internalServerError,
                 headers: [.contentType: "text/html"],
@@ -91,10 +119,7 @@ class WebServer {
             )
         }
         
-        // Determine content type
-        let contentType = getContentType(for: filePath.pathExtension)
-        
-        print("✅ Serving file with content-type: \(contentType)")
+        print("✅ Serving text file with content-type: \(contentType)")
         
         return Response(
             status: .ok,

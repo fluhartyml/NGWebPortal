@@ -15,9 +15,15 @@ struct ServerView: View {
             
             // Status indicator
             HStack(spacing: 15) {
-                Circle()
-                    .fill(server.isRunning ? Color.green : Color.red)
-                    .frame(width: 20, height: 20)
+                if server.isRunning {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: "octagon.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.red)
+                }
                 
                 Text(server.isRunning ? "Server Running" : "Server Stopped")
                     .font(.title2)
