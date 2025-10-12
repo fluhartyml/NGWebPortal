@@ -4,14 +4,15 @@
 //
 //  Native WYSIWYG rich text editor with formatting toolbar
 //
+// Ensure this file is included in your target for RichTextEditor to be available elsewhere.
 
 import SwiftUI
 import AppKit
 
-struct RichTextEditor: NSViewRepresentable {
+public struct RichTextEditor: NSViewRepresentable {
     @Binding var attributedText: NSAttributedString
     
-    func makeNSView(context: Context) -> NSScrollView {
+    public func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         
         guard let textView = scrollView.documentView as? NSTextView else {
@@ -32,7 +33,7 @@ struct RichTextEditor: NSViewRepresentable {
         return scrollView
     }
     
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         
         if textView.attributedString() != attributedText {
@@ -40,18 +41,18 @@ struct RichTextEditor: NSViewRepresentable {
         }
     }
     
-    func makeCoordinator() -> Coordinator {
+    public func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
     
-    class Coordinator: NSObject, NSTextViewDelegate {
+    public class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
         
         init(_ parent: RichTextEditor) {
             self.parent = parent
         }
         
-        func textDidChange(_ notification: Notification) {
+        public func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.attributedText = textView.attributedString()
         }
@@ -142,6 +143,7 @@ struct RichTextEditorView: View {
             
             // Text Editor
             RichTextEditorWrapper(attributedText: $attributedText, textView: $textView)
+                .frame(maxHeight: CGFloat.greatestFiniteMagnitude) // Replaced .infinity with CGFloat.greatestFiniteMagnitude
         }
     }
     
@@ -187,12 +189,14 @@ struct RichTextEditorView: View {
         guard let textView = textView else { return }
         textView.window?.makeFirstResponder(textView)
         
-        let fontSize: CGFloat = switch level {
-        case 1: 28
-        case 2: 24
-        case 3: 20
-        default: 14
-        }
+        let fontSize: CGFloat = {
+            switch level {
+            case 1: return 28
+            case 2: return 24
+            case 3: return 20
+            default: return 14
+            }
+        }()
         
         let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         
@@ -232,10 +236,9 @@ struct RichTextEditorView: View {
         let line = (textView.string as NSString).substring(with: lineRange)
         
         // Simple numbered list - just adds "1. " prefix
-        let numberedPrefixPattern = "^\\d+\\.\\s"
-        if let _ = line.range(of: numberedPrefixPattern, options: .regularExpression) {
+        if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
             // Remove number
-            let newLine = (line as NSString).replacingOccurrences(of: numberedPrefixPattern, with: "", options: .regularExpression, range: NSRange(location: 0, length: line.utf16.count))
+            let newLine = line.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
             textView.replaceCharacters(in: lineRange, with: newLine)
         } else {
             // Add number

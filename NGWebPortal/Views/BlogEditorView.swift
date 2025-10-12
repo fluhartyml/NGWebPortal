@@ -2,77 +2,52 @@
 //  BlogEditorView.swift
 //  NGWebPortal
 //
-//  Complete blog post editor with iWeb-inspired layout
+//  Blog post editor with WYSIWYG rich text editing
 //
+
+// Depends on RichTextEditorView (see RichTextEditor.swift)
 
 import SwiftUI
 import SwiftData
-import PhotosUI
+import UniformTypeIdentifiers
+import AppKit
 
 struct BlogEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \BlogPost.publishedDate, order: .reverse) private var posts: [BlogPost]
     
     @State private var selectedPost: BlogPost?
-    @State private var isCreatingNew = false
-    @State private var isPublishingAll = false
+    @State private var showingImagePicker = false
+    @State private var showingPublishConfirmation = false
+    @State private var showingDeleteConfirmation = false
     
     var body: some View {
-        HSplitView {
-            // Left sidebar - Post list
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Blog Posts")
-                        .font(.headline)
-                    Spacer()
-                    Button(action: publishAll) {
-                        Image(systemName: "arrow.up.doc")
-                        Text("Publish All")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(posts.isEmpty || isPublishingAll)
-                    
-                    Button(action: createNewPost) {
-                        Image(systemName: "plus")
-                    }
-                    .buttonStyle(.borderless)
-                }
-                .padding()
-                
-                Divider()
-                
-                if posts.isEmpty {
-                    VStack {
-                        Spacer()
-                        Text("No posts yet")
-                            .foregroundStyle(.secondary)
-                        Text("Click + to create your first post")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    List(posts, selection: $selectedPost) { post in
-                        PostListItem(post: post)
-                            .tag(post)
-                    }
-                    .listStyle(.sidebar)
+        NavigationSplitView {
+            // Post List
+            List(selection: $selectedPost) {
+                ForEach(posts) { post in
+                    PostListItem(post: post)
+                        .tag(post)
                 }
             }
-            .frame(minWidth: 250, maxWidth: 300)
-            
-            // Right side - Post editor
-            if let post = selectedPost {
-                PostEditorForm(post: post)
-            } else {
-                VStack {
-                    Spacer()
-                    Text("Select a post to edit or create a new one")
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            .navigationTitle("Blog Posts")
+            .toolbar {
+                Button(action: createNewPost) {
+                    Label("New Post", systemImage: "plus")
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            
+        } detail: {
+            if let post = selectedPost {
+                PostEditor(
+                    post: post,
+                    showingImagePicker: $showingImagePicker,
+                    showingPublishConfirmation: $showingPublishConfirmation,
+                    showingDeleteConfirmation: $showingDeleteConfirmation
+                )
+            } else {
+                Text("Select a post to edit or create a new one")
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -80,306 +55,160 @@ struct BlogEditorView: View {
     private func createNewPost() {
         let newPost = BlogPost()
         modelContext.insert(newPost)
+        try? modelContext.save()
         selectedPost = newPost
-    }
-    
-    private func publishAll() {
-        guard let siteFolder = SiteManager.shared.currentSiteFolder else { return }
-        
-        isPublishingAll = true
-        Task { @MainActor in
-            let templateEngine = TemplateEngine(modelContext: modelContext)
-            
-            // First, save all featured images to disk
-            for post in posts {
-                if let imageData = post.featuredImageData {
-                    let imagesFolder = siteFolder.appendingPathComponent("images")
-                    try? FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
-                    
-                    let imageFilename = "featured-\(post.id.uuidString).jpg"
-                    let imageURL = imagesFolder.appendingPathComponent(imageFilename)
-                    try? imageData.write(to: imageURL)
-                }
-            }
-            
-            // Then generate HTML for each post
-            for post in posts {
-                do {
-                    post.isDraft = false
-                    if post.publishedDate < Date(timeIntervalSince1970: 0) {
-                        post.publishedDate = Date()
-                    }
-                    try modelContext.save()
-                    
-                    // Generate individual post HTML
-                    let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: posts)
-                    let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
-                    let blogFolder = siteFolder.appendingPathComponent("blog")
-                    try? FileManager.default.createDirectory(at: blogFolder, withIntermediateDirectories: true)
-                    let postURL = blogFolder.appendingPathComponent("\(postFilename).html")
-                    try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
-                    
-                    print("✅ Published: \(post.title)")
-                } catch {
-                    print("❌ Failed to publish \(post.title): \(error)")
-                }
-            }
-            
-            // Generate blog list page
-            do {
-                let publishedPosts = posts.filter { !$0.isDraft }
-                let blogListHTML = templateEngine.generateBlogListHTML(posts: publishedPosts)
-                let blogListURL = siteFolder.appendingPathComponent("blog.html")
-                try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
-                print("✅ Blog list page updated")
-            } catch {
-                print("❌ Failed to update blog list: \(error)")
-            }
-            
-            isPublishingAll = false
-        }
     }
 }
 
-// MARK: - Post List Item
 struct PostListItem: View {
     let post: BlogPost
-    @Environment(\.modelContext) private var modelContext
-    @Query private var allPosts: [BlogPost]
-    @State private var isPublishing = false
     
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail preview
-            if let image = post.featuredImage {
-                Image(nsImage: image)
+            // Thumbnail
+            if let imageData = post.featuredImageData,
+               let nsImage = NSImage(data: imageData) {
+                Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(LinearGradient(
-                        colors: [Color(red: 0.4, green: 0.49, blue: 0.92), Color(red: 0.46, green: 0.29, blue: 0.64)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.gray.opacity(0.2))
                     .frame(width: 60, height: 60)
-                    .overlay(
+                    .overlay {
                         Image(systemName: "photo")
-                            .foregroundColor(.white.opacity(0.6))
-                            .font(.title2)
-                    )
+                            .foregroundColor(.gray)
+                    }
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(post.title.isEmpty ? "Untitled Post" : post.title)
                     .font(.headline)
-                    .lineLimit(1)
                 
-                Text(post.subtitle.isEmpty ? "No subtitle" : post.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                if !post.subtitle.isEmpty {
+                    Text(post.subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 
                 HStack {
                     if post.isDraft {
-                        Text("Draft")
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.2))
+                        Label("Draft", systemImage: "doc.text")
+                            .font(.caption)
                             .foregroundColor(.orange)
-                            .cornerRadius(4)
+                    } else {
+                        Label("Published", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
                     }
                     
-                    Text(post.publishedDate, style: .date)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    Text(post.publishedDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
-            
-            Spacer()
-            
-            // Publish button
-            Button(action: { publishPost() }) {
-                if isPublishing {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .frame(width: 16, height: 16)
-                } else {
-                    Image(systemName: "arrow.up.doc.fill")
-                        .foregroundColor(.blue)
-                }
-            }
-            .buttonStyle(.plain)
-            .help("Publish this post")
-            .disabled(isPublishing)
         }
         .padding(.vertical, 4)
     }
-    
-    private func publishPost() {
-        guard let siteFolder = SiteManager.shared.currentSiteFolder else { return }
-        
-        isPublishing = true
-        Task { @MainActor in
-            do {
-                post.isDraft = false
-                if post.publishedDate < Date(timeIntervalSince1970: 0) {
-                    post.publishedDate = Date()
-                }
-                try modelContext.save()
-                
-                // Save featured image to disk
-                if let imageData = post.featuredImageData {
-                    let imagesFolder = siteFolder.appendingPathComponent("images")
-                    try FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
-                    
-                    let imageFilename = "featured-\(post.id.uuidString).jpg"
-                    let imageURL = imagesFolder.appendingPathComponent(imageFilename)
-                    try imageData.write(to: imageURL)
-                }
-                
-                let templateEngine = TemplateEngine(modelContext: modelContext)
-                
-                // Generate individual post HTML
-                let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: allPosts)
-                let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
-                let blogFolder = siteFolder.appendingPathComponent("blog")
-                try FileManager.default.createDirectory(at: blogFolder, withIntermediateDirectories: true)
-                let postURL = blogFolder.appendingPathComponent("\(postFilename).html")
-                try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
-                
-                // Update blog list page
-                let publishedPosts = allPosts.filter { !$0.isDraft }
-                let blogListHTML = templateEngine.generateBlogListHTML(posts: publishedPosts)
-                let blogListURL = siteFolder.appendingPathComponent("blog.html")
-                try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
-                
-                print("✅ Published: \(post.title)")
-            } catch {
-                print("❌ Failed to publish: \(error)")
-            }
-            isPublishing = false
-        }
-    }
 }
 
-// MARK: - Post Editor Form
-struct PostEditorForm: View {
+struct PostEditor: View {
     @Bindable var post: BlogPost
-    @Environment(\.modelContext) private var modelContext
-    @Query private var allPosts: [BlogPost]
+    @Binding var showingImagePicker: Bool
+    @Binding var showingPublishConfirmation: Bool
+    @Binding var showingDeleteConfirmation: Bool
     
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var showingPublishConfirmation = false
-    @State private var showingPublishSuccess = false
-    @State private var showingPublishError = false
-    @State private var publishErrorMessage = ""
+    @Environment(\.modelContext) private var modelContext
+    @State private var contentAttributedString: NSAttributedString
+    
+    init(
+        post: BlogPost,
+        showingImagePicker: Binding<Bool>,
+        showingPublishConfirmation: Binding<Bool>,
+        showingDeleteConfirmation: Binding<Bool>
+    ) {
+        self.post = post
+        self._showingImagePicker = showingImagePicker
+        self._showingPublishConfirmation = showingPublishConfirmation
+        self._showingDeleteConfirmation = showingDeleteConfirmation
+        
+        // Initialize with existing content or empty string
+        self._contentAttributedString = State(initialValue: NSAttributedString(string: post.content))
+    }
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                
-                // Featured Image Section
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Featured Image")
-                        .font(.headline)
-                    
-                    if let image = post.featuredImage {
-                        ZStack(alignment: .topTrailing) {
-                            Image(nsImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 300)
-                                .frame(maxWidth: .infinity)
-                                .clipped()
-                                .cornerRadius(8)
-                            
-                            Button(action: removeImage) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.white)
-                                    .background(Circle().fill(Color.black.opacity(0.5)))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(8)
+                // Featured Image
+                if let imageData = post.featuredImageData,
+                   let nsImage = NSImage(data: imageData) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        
+                        Button(action: removeImage) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                                .background(Circle().fill(Color.black.opacity(0.6)))
                         }
-                    } else {
-                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                            VStack(spacing: 12) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 48))
-                                    .foregroundStyle(.secondary)
-                                Text("Choose Featured Image")
-                                    .font(.headline)
-                                Text("This image will inspire your post")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 200)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
-                        }
+                        .padding(8)
                         .buttonStyle(.plain)
-                        .onChange(of: selectedPhotoItem) { oldValue, newValue in
-                            Task {
-                                await loadSelectedPhoto()
-                            }
-                        }
                     }
+                } else {
+                    Button(action: { showingImagePicker = true }) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(height: 200)
+                            .overlay {
+                                VStack {
+                                    Image(systemName: "photo.badge.plus")
+                                        .font(.largeTitle)
+                                        .foregroundColor(.secondary)
+                                    Text("Add Featured Image")
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
                 }
-                
-                Divider()
                 
                 // Title
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Title")
-                        .font(.headline)
-                    TextField("Enter your blog post title...", text: $post.title)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 28, weight: .bold))
-                }
+                TextField("Post Title", text: $post.title)
+                    .font(.largeTitle)
+                    .textFieldStyle(.plain)
                 
-                // Subtitle/Synopsis
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Subtitle / Synopsis")
-                        .font(.headline)
-                    TextField("Brief introduction or synopsis...", text: $post.subtitle)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 18))
-                        .foregroundStyle(.secondary)
-                }
+                // Subtitle
+                TextField("Subtitle or brief synopsis", text: $post.subtitle)
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .textFieldStyle(.plain)
                 
                 Divider()
                 
-                // Content
+                // Rich Text Content Editor
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Content")
                         .font(.headline)
                     
-                    TextEditor(text: $post.content)
-                        .font(.system(size: 16))
+                    RichTextEditorView(attributedText: $contentAttributedString)
                         .frame(minHeight: 400)
-                        .scrollContentBackground(.hidden)
-                        .background(Color.gray.opacity(0.05))
-                        .cornerRadius(8)
+                        .onChange(of: contentAttributedString) { _, newValue in
+                            // Convert attributed string to HTML for storage
+                            post.content = attributedStringToHTML(newValue)
+                        }
                 }
                 
                 Divider()
                 
                 // Action Buttons
-                HStack(spacing: 12) {
-                    Button("Delete Post") {
-                        deletePost()
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                    
-                    Spacer()
-                    
+                HStack {
                     if post.isDraft {
                         Button("Save Draft") {
                             saveDraft()
@@ -392,10 +221,24 @@ struct PostEditorForm: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(post.title.isEmpty)
+                    
+                    Spacer()
+                    
+                    Button("Delete", role: .destructive) {
+                        showingDeleteConfirmation = true
+                    }
+                    .buttonStyle(.bordered)
                 }
                 .padding(.vertical)
             }
             .padding(40)
+        }
+        .fileImporter(
+            isPresented: $showingImagePicker,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImageSelection(result)
         }
         .alert("Publish Post?", isPresented: $showingPublishConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -405,35 +248,27 @@ struct PostEditorForm: View {
         } message: {
             Text("This will make your post visible on your website.")
         }
-        .alert("Published Successfully!", isPresented: $showingPublishSuccess) {
-            Button("OK") { }
+        .alert("Delete Post?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deletePost()
+            }
         } message: {
-            Text("Your post is now live at:\nlocalhost:8080/blog/\(post.filename)")
-        }
-        .alert("Publish Failed", isPresented: $showingPublishError) {
-            Button("OK") { }
-        } message: {
-            Text(publishErrorMessage)
+            Text("This action cannot be undone.")
         }
     }
     
     private func removeImage() {
         post.featuredImageData = nil
-        selectedPhotoItem = nil
     }
     
-    private func loadSelectedPhoto() async {
-        guard let item = selectedPhotoItem else { return }
-        
-        do {
-            if let data = try await item.loadTransferable(type: Data.self) {
-                await MainActor.run {
-                    post.featuredImageData = data
-                }
-            }
-        } catch {
-            print("❌ Error loading photo: \(error)")
+    private func handleImageSelection(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result,
+              let url = urls.first,
+              let imageData = try? Data(contentsOf: url) else {
+            return
         }
+        post.featuredImageData = imageData
     }
     
     private func saveDraft() {
@@ -444,15 +279,10 @@ struct PostEditorForm: View {
     private func publishPost() {
         post.isDraft = false
         post.publishedDate = Date()
+        try? modelContext.save()
         
-        do {
-            try modelContext.save()
-            try generateHTML()
-            showingPublishSuccess = true
-        } catch {
-            publishErrorMessage = error.localizedDescription
-            showingPublishError = true
-        }
+        // Generate HTML file
+        generateHTML()
     }
     
     private func deletePost() {
@@ -460,42 +290,202 @@ struct PostEditorForm: View {
         try? modelContext.save()
     }
     
-    private func generateHTML() throws {
-        guard let siteFolder = SiteManager.shared.currentSiteFolder else {
-            throw NSError(domain: "BlogEditor", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Site folder not found. Please initialize site first."
-            ])
-        }
+    private func generateHTML() {
+        let siteManager = SiteManager.shared
         
-        // Save featured image to disk
-        if let imageData = post.featuredImageData {
-            let imagesFolder = siteFolder.appendingPathComponent("images")
-            try FileManager.default.createDirectory(at: imagesFolder, withIntermediateDirectories: true)
-            
-            let imageFilename = "featured-\(post.id.uuidString).jpg"
-            let imageURL = imagesFolder.appendingPathComponent(imageFilename)
-            try imageData.write(to: imageURL)
-        }
-        
-        let templateEngine = TemplateEngine(modelContext: modelContext)
-        
-        // Generate individual post HTML
-        let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: allPosts)
-        let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
-        let blogFolder = siteFolder.appendingPathComponent("blog")
-        try FileManager.default.createDirectory(at: blogFolder, withIntermediateDirectories: true)
-        let postURL = blogFolder.appendingPathComponent("\(postFilename).html")
-        try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
-        
-        // Update blog list page
-        let publishedPosts = allPosts.filter { !$0.isDraft }
-        let blogListHTML = templateEngine.generateBlogListHTML(posts: publishedPosts)
-        let blogListURL = siteFolder.appendingPathComponent("blog.html")
-        try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
+        // Get settings for accent color
+        let html = generateBlogPostHTML()
+        let filename = "\(post.filename).html"
+        siteManager.saveBlogPost(filename: filename, html: html)
         
         print("✅ Published: \(post.title)")
-        print("📁 Location: \(postURL.path)")
-        print("🌐 URL: http://localhost:8080/blog/\(postFilename).html")
+    }
+    
+    private func generateBlogPostHTML() -> String {
+        // TODO: Get actual site settings
+        let siteName = "NG Web Portal"
+        let siteTagline = "Welcome to my website"
+        let accentColor = "#007AFF"
+        
+        var imageHTML = ""
+        if let imageData = post.featuredImageData {
+            let base64String = imageData.base64EncodedString()
+            imageHTML = """
+            <div class="featured-image">
+                <img src="data:image/jpeg;base64,\(base64String)" alt="\(post.title)">
+            </div>
+            """
+        }
+        
+        return """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>\(post.title) - \(siteName)</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background: #fff;
+                }
+                
+                header {
+                    background: \(accentColor);
+                    color: white;
+                    padding: 2rem;
+                    text-align: center;
+                }
+                
+                header h1 {
+                    font-size: 2.5rem;
+                    margin-bottom: 0.5rem;
+                }
+                
+                nav {
+                    display: flex;
+                    gap: 2rem;
+                    justify-content: center;
+                    margin-top: 1rem;
+                }
+                
+                nav a {
+                    color: white;
+                    text-decoration: none;
+                    font-weight: 500;
+                }
+                
+                nav a:hover {
+                    text-decoration: underline;
+                }
+                
+                .container {
+                    max-width: 800px;
+                    margin: 3rem auto;
+                    padding: 0 2rem;
+                }
+                
+                .featured-image {
+                    margin-bottom: 2rem;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                
+                .featured-image img {
+                    width: 100%;
+                    height: auto;
+                    display: block;
+                }
+                
+                h2 {
+                    font-size: 2.5rem;
+                    margin-bottom: 1rem;
+                    color: \(accentColor);
+                }
+                
+                .subtitle {
+                    font-size: 1.25rem;
+                    color: #666;
+                    margin-bottom: 2rem;
+                    font-style: italic;
+                }
+                
+                .content {
+                    font-size: 1.125rem;
+                    line-height: 1.8;
+                }
+                
+                .content p {
+                    margin-bottom: 1.5rem;
+                }
+                
+                .content h1, .content h2, .content h3 {
+                    margin-top: 2rem;
+                    margin-bottom: 1rem;
+                }
+                
+                .content ul, .content ol {
+                    margin-bottom: 1.5rem;
+                    padding-left: 2rem;
+                }
+                
+                .content a {
+                    color: \(accentColor);
+                    text-decoration: underline;
+                }
+                
+                .back-link {
+                    display: inline-block;
+                    margin-top: 3rem;
+                    color: \(accentColor);
+                    text-decoration: none;
+                    font-weight: 500;
+                }
+                
+                .back-link:hover {
+                    text-decoration: underline;
+                }
+                
+                footer {
+                    text-align: center;
+                    padding: 2rem;
+                    background: #f5f5f5;
+                    margin-top: 4rem;
+                }
+            </style>
+        </head>
+        <body>
+            <header>
+                <h1>\(siteName)</h1>
+                <p>\(siteTagline)</p>
+                <nav>
+                    <a href="/index.html">Home</a>
+                    <a href="/blog/index.html">Blog</a>
+                    <a href="/about.html">About</a>
+                    <a href="/portfolio.html">Portfolio</a>
+                </nav>
+            </header>
+            <div class="container">
+                \(imageHTML)
+                <h2>\(post.title)</h2>
+                <p class="subtitle">\(post.subtitle)</p>
+                <div class="content">
+                    \(post.content)
+                </div>
+                <a href="/blog/index.html" class="back-link">← Back to Blog</a>
+            </div>
+            <footer>
+                <p>&copy; 2025 \(siteName). Powered by NG Web Portal</p>
+            </footer>
+        </body>
+        </html>
+        """
+    }
+    
+    private func attributedStringToHTML(_ attributedString: NSAttributedString) -> String {
+        // Convert NSAttributedString to HTML
+        let documentAttributes: [NSAttributedString.DocumentAttributeKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        
+        guard let htmlData = try? attributedString.data(
+            from: NSRange(location: 0, length: attributedString.length),
+            documentAttributes: documentAttributes
+        ),
+              let htmlString = String(data: htmlData, encoding: .utf8) else {
+            return attributedString.string
+        }
+        
+        return htmlString
     }
 }
 
@@ -503,3 +493,4 @@ struct PostEditorForm: View {
     BlogEditorView()
         .modelContainer(for: BlogPost.self)
 }
+

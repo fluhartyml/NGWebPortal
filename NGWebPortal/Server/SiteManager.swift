@@ -212,4 +212,27 @@ class SiteManager {
         guard let folder = currentSiteFolder else { return }
         NSWorkspace.shared.selectFile(nil as String?, inFileViewerRootedAtPath: folder.path)
     }
+    
+    /// Saves a blog post HTML file into the blog folder of the current site.
+    /// - Parameters:
+    ///   - filename: The filename to use (should include ".html").
+    ///   - html: The HTML content to write.
+    func saveBlogPost(filename: String, html: String) {
+        guard let siteFolder = currentSiteFolder else {
+            print("❌ Site folder not available")
+            return
+        }
+        let blogFolder = siteFolder.appendingPathComponent("blog")
+        let fileManager = FileManager.default
+        do {
+            if !fileManager.fileExists(atPath: blogFolder.path) {
+                try fileManager.createDirectory(at: blogFolder, withIntermediateDirectories: true)
+            }
+            let fileURL = blogFolder.appendingPathComponent(filename)
+            try html.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("✅ Blog post saved: \(fileURL.path)")
+        } catch {
+            print("❌ Failed to save blog post: \(error)")
+        }
+    }
 }

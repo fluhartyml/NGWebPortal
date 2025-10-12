@@ -421,7 +421,7 @@ struct CustomizeView: View {
     
     private func generateBlogListHTML() -> String {
         let accentHex = accentColor.toHex()
-        let publishedPosts = allPosts.filter { !$0.isDraft }.sorted { $0.publishedDate ?? Date.distantPast > $1.publishedDate ?? Date.distantPast }
+        let publishedPosts = allPosts.filter { !$0.isDraft }.sorted { $0.publishedDate > $1.publishedDate }
         
         let postsHTML = publishedPosts.map { post in
             var imageHTML = ""

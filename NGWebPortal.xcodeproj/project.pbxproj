@@ -37,9 +37,22 @@
 		C0C956B62E9AC52A00BB33DC /* NGWebPortalUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NGWebPortalUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C0C957042E9C27C900BB33DC /* Exceptions for "NGWebPortal" folder in "NGWebPortal" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/RichTextEditor.swift,
+			);
+			target = C0C9569C2E9AC52800BB33DC /* NGWebPortal */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C0C9569F2E9AC52800BB33DC /* NGWebPortal */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C0C957042E9C27C900BB33DC /* Exceptions for "NGWebPortal" folder in "NGWebPortal" target */,
+			);
 			path = NGWebPortal;
 			sourceTree = "<group>";
 		};

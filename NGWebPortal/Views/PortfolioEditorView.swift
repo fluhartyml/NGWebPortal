@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import AppKit
 
 struct PortfolioEditorView: View {
     @Environment(\.modelContext) private var modelContext
@@ -119,8 +120,8 @@ struct PortfolioEditorView: View {
                 Text("Description")
                     .font(.headline)
                 
-                RichTextEditor(html: $editDescription)
-                    .frame(maxHeight: .infinity)
+                TextEditor(text: $editDescription)
+                    .frame(maxHeight: CGFloat.greatestFiniteMagnitude)
                     .border(Color.gray.opacity(0.3), width: 1)
                     .cornerRadius(4)
             }
