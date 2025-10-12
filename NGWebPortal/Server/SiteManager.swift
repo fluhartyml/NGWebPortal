@@ -69,11 +69,7 @@ class SiteManager {
             try css.write(to: cssURL, atomically: true, encoding: .utf8)
         }
         
-        // Create blog index if it doesn't exist
-        let blogIndexURL = siteFolder.appendingPathComponent("blog/index.html")
-        if !fileManager.fileExists(atPath: blogIndexURL.path) {
-            try TemplateEngine.shared.updateBlogIndex(siteFolder: siteFolder)
-        }
+        // Note: blog/index.html will be created when publishing blog posts
         
         print("✅ Site folder initialized successfully")
     }
@@ -94,7 +90,7 @@ class SiteManager {
                     <h1>Welcome to NightGard</h1>
                     <nav>
                         <a href="index.html">Home</a>
-                        <a href="blog/index.html">Blog</a>
+                        <a href="blog.html">Blog</a>
                     </nav>
                 </header>
                 
@@ -102,7 +98,7 @@ class SiteManager {
                     <section class="hero">
                         <h2>Your Personal Web Portal</h2>
                         <p>Share your thoughts, stories, and ideas with the world.</p>
-                        <a href="blog/index.html" class="cta-button">Read the Blog</a>
+                        <a href="blog.html" class="cta-button">Read the Blog</a>
                     </section>
                 </main>
                 

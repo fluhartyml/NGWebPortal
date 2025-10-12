@@ -84,23 +84,43 @@ struct BlogEditorView: View {
     }
     
     private func publishAll() {
+        guard let siteFolder = SiteManager.shared.currentSiteFolder else { return }
+        
         isPublishingAll = true
-        Task {
+        Task { @MainActor in
+            let templateEngine = TemplateEngine(modelContext: modelContext)
+            
             for post in posts {
-                if let siteFolder = SiteManager.shared.currentSiteFolder {
-                    do {
-                        post.isDraft = false
-                        if post.publishedDate < Date(timeIntervalSince1970: 0) {
-                            post.publishedDate = Date()
-                        }
-                        try modelContext.save()
-                        _ = try TemplateEngine.shared.generateBlogPostHTML(post: post, siteFolder: siteFolder)
-                        print("✅ Published: \(post.title)")
-                    } catch {
-                        print("❌ Failed to publish \(post.title): \(error)")
+                do {
+                    post.isDraft = false
+                    if post.publishedDate < Date(timeIntervalSince1970: 0) {
+                        post.publishedDate = Date()
                     }
+                    try modelContext.save()
+                    
+                    // Generate individual post HTML
+                    let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: posts)
+                    let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
+                    let postURL = siteFolder.appendingPathComponent("blog").appendingPathComponent("\(postFilename).html")
+                    try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
+                    
+                    print("✅ Published: \(post.title)")
+                } catch {
+                    print("❌ Failed to publish \(post.title): \(error)")
                 }
             }
+            
+            // Generate blog list page
+            do {
+                let publishedPosts = posts.filter { !$0.isDraft }
+                let blogListHTML = templateEngine.generateBlogListHTML(posts: publishedPosts)
+                let blogListURL = siteFolder.appendingPathComponent("blog.html")
+                try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
+                print("✅ Blog list page updated")
+            } catch {
+                print("❌ Failed to update blog list: \(error)")
+            }
+            
             isPublishingAll = false
         }
     }
@@ -110,6 +130,7 @@ struct BlogEditorView: View {
 struct PostListItem: View {
     let post: BlogPost
     @Environment(\.modelContext) private var modelContext
+    @Query private var allPosts: [BlogPost]
     @State private var isPublishing = false
     
     var body: some View {
@@ -187,14 +208,28 @@ struct PostListItem: View {
         guard let siteFolder = SiteManager.shared.currentSiteFolder else { return }
         
         isPublishing = true
-        Task {
+        Task { @MainActor in
             do {
                 post.isDraft = false
                 if post.publishedDate < Date(timeIntervalSince1970: 0) {
                     post.publishedDate = Date()
                 }
                 try modelContext.save()
-                _ = try TemplateEngine.shared.generateBlogPostHTML(post: post, siteFolder: siteFolder)
+                
+                let templateEngine = TemplateEngine(modelContext: modelContext)
+                
+                // Generate individual post HTML
+                let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: allPosts)
+                let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
+                let postURL = siteFolder.appendingPathComponent("blog").appendingPathComponent("\(postFilename).html")
+                try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
+                
+                // Update blog list page
+                let publishedPosts = allPosts.filter { !$0.isDraft }
+                let blogListHTML = templateEngine.generateBlogListHTML(posts: publishedPosts)
+                let blogListURL = siteFolder.appendingPathComponent("blog.html")
+                try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
+                
                 print("✅ Published: \(post.title)")
             } catch {
                 print("❌ Failed to publish: \(error)")
@@ -208,6 +243,7 @@ struct PostListItem: View {
 struct PostEditorForm: View {
     @Bindable var post: BlogPost
     @Environment(\.modelContext) private var modelContext
+    @Query private var allPosts: [BlogPost]
     
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showingPublishConfirmation = false
@@ -398,19 +434,29 @@ struct PostEditorForm: View {
     }
     
     private func generateHTML() throws {
-        // Get site folder from SiteManager
         guard let siteFolder = SiteManager.shared.currentSiteFolder else {
             throw NSError(domain: "BlogEditor", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "Site folder not found. Please initialize site first."
             ])
         }
         
-        // Generate HTML using TemplateEngine
-        let postURL = try TemplateEngine.shared.generateBlogPostHTML(post: post, siteFolder: siteFolder)
+        let templateEngine = TemplateEngine(modelContext: modelContext)
+        
+        // Generate individual post HTML
+        let postHTML = templateEngine.generateBlogPostHTML(post: post, allPosts: allPosts)
+        let postFilename = post.filename.replacingOccurrences(of: ".html", with: "")
+        let postURL = siteFolder.appendingPathComponent("blog").appendingPathComponent("\(postFilename).html")
+        try postHTML.write(to: postURL, atomically: true, encoding: .utf8)
+        
+        // Update blog list page
+        let publishedPosts = allPosts.filter { !$0.isDraft }
+        let blogListHTML = templateEngine.generateBlogListHTML(posts: publishedPosts)
+        let blogListURL = siteFolder.appendingPathComponent("blog.html")
+        try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
         
         print("✅ Published: \(post.title)")
         print("📁 Location: \(postURL.path)")
-        print("🌐 URL: http://localhost:8080/blog/\(post.filename)")
+        print("🌐 URL: http://localhost:8080/blog/\(postFilename).html")
     }
 }
 
