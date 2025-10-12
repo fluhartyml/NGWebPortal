@@ -7,7 +7,7 @@
 
 import SwiftUI
 import SwiftData
-import UniformTypeIdentifiers
+import PhotosUI
 
 struct BlogEditorView: View {
     @Environment(\.modelContext) private var modelContext
@@ -47,7 +47,9 @@ struct BlogEditorView: View {
                 } else {
                     List(posts, selection: $selectedPost) { post in
                         PostListItem(post: post)
+                            .tag(post)
                     }
+                    .listStyle(.sidebar)
                 }
             }
             .frame(minWidth: 250, maxWidth: 300)
@@ -114,8 +116,11 @@ struct PostEditorForm: View {
     @Bindable var post: BlogPost
     @Environment(\.modelContext) private var modelContext
     
-    @State private var showingImagePicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showingPublishConfirmation = false
+    @State private var showingPublishSuccess = false
+    @State private var showingPublishError = false
+    @State private var publishErrorMessage = ""
     
     var body: some View {
         ScrollView {
@@ -146,7 +151,7 @@ struct PostEditorForm: View {
                             .padding(8)
                         }
                     } else {
-                        Button(action: { showingImagePicker = true }) {
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                             VStack(spacing: 12) {
                                 Image(systemName: "photo.on.rectangle.angled")
                                     .font(.system(size: 48))
@@ -163,6 +168,11 @@ struct PostEditorForm: View {
                             .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
+                        .onChange(of: selectedPhotoItem) { oldValue, newValue in
+                            Task {
+                                await loadSelectedPhoto()
+                            }
+                        }
                     }
                 }
                 
@@ -231,13 +241,6 @@ struct PostEditorForm: View {
             }
             .padding(40)
         }
-        .fileImporter(
-            isPresented: $showingImagePicker,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: false
-        ) { result in
-            handleImageSelection(result)
-        }
         .alert("Publish Post?", isPresented: $showingPublishConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Publish") {
@@ -246,19 +249,35 @@ struct PostEditorForm: View {
         } message: {
             Text("This will make your post visible on your website.")
         }
+        .alert("Published Successfully!", isPresented: $showingPublishSuccess) {
+            Button("OK") { }
+        } message: {
+            Text("Your post is now live at:\nlocalhost:8080/blog/\(post.filename)")
+        }
+        .alert("Publish Failed", isPresented: $showingPublishError) {
+            Button("OK") { }
+        } message: {
+            Text(publishErrorMessage)
+        }
     }
     
     private func removeImage() {
         post.featuredImageData = nil
+        selectedPhotoItem = nil
     }
     
-    private func handleImageSelection(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result,
-              let url = urls.first,
-              let imageData = try? Data(contentsOf: url) else {
-            return
+    private func loadSelectedPhoto() async {
+        guard let item = selectedPhotoItem else { return }
+        
+        do {
+            if let data = try await item.loadTransferable(type: Data.self) {
+                await MainActor.run {
+                    post.featuredImageData = data
+                }
+            }
+        } catch {
+            print("❌ Error loading photo: \(error)")
         }
-        post.featuredImageData = imageData
     }
     
     private func saveDraft() {
@@ -269,10 +288,15 @@ struct PostEditorForm: View {
     private func publishPost() {
         post.isDraft = false
         post.publishedDate = Date()
-        try? modelContext.save()
         
-        // TODO: Generate HTML file
-        generateHTML()
+        do {
+            try modelContext.save()
+            try generateHTML()
+            showingPublishSuccess = true
+        } catch {
+            publishErrorMessage = error.localizedDescription
+            showingPublishError = true
+        }
     }
     
     private func deletePost() {
@@ -280,10 +304,20 @@ struct PostEditorForm: View {
         try? modelContext.save()
     }
     
-    private func generateHTML() {
-        // TODO: Implement HTML generation using TemplateEngine
-        print("📝 Generating HTML for: \(post.title)")
-        print("📁 Filename: \(post.filename)")
+    private func generateHTML() throws {
+        // Get site folder from SiteManager
+        guard let siteFolder = SiteManager.shared.currentSiteFolder else {
+            throw NSError(domain: "BlogEditor", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Site folder not found. Please initialize site first."
+            ])
+        }
+        
+        // Generate HTML using TemplateEngine
+        let postURL = try TemplateEngine.shared.generateBlogPostHTML(post: post, siteFolder: siteFolder)
+        
+        print("✅ Published: \(post.title)")
+        print("📁 Location: \(postURL.path)")
+        print("🌐 URL: http://localhost:8080/blog/\(post.filename)")
     }
 }
 

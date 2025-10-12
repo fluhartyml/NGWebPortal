@@ -17,20 +17,27 @@ class WebServer {
     var errorMessage = ""
     
     init() {
-        // Initialize site folder structure and capture errors
-        do {
-            try SiteManager.shared.initializeSiteFolder()
-            print("✅ Site folder initialized successfully")
-        } catch {
-            errorMessage = "Failed to initialize site folder: \(error.localizedDescription)"
-            print("❌ Site folder initialization error: \(error)")
+        // Site folder is automatically initialized by SiteManager singleton
+        if let folder = SiteManager.shared.currentSiteFolder {
+            print("✅ Site folder ready: \(folder.path)")
+        } else {
+            errorMessage = "Failed to initialize site folder"
+            print("❌ Site folder initialization failed")
         }
     }
     
     // Serve static files from site folder
     @Sendable func serveStaticFile(request: Request, context: some RequestContext) async throws -> Response {
         let path = request.uri.path
-        let siteFolder = SiteManager.shared.siteFolder
+        
+        guard let siteFolder = SiteManager.shared.currentSiteFolder else {
+            print("❌ Site folder not available")
+            return Response(
+                status: .internalServerError,
+                headers: [.contentType: "text/html"],
+                body: .init(byteBuffer: ByteBuffer(string: "Site folder not initialized"))
+            )
+        }
         
         print("📥 Request for: \(path)")
         
@@ -127,6 +134,12 @@ class WebServer {
     func start() async throws {
         guard !isRunning else { return }
         
+        guard let siteFolder = SiteManager.shared.currentSiteFolder else {
+            throw NSError(domain: "WebServer", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Site folder not initialized"
+            ])
+        }
+        
         errorMessage = ""
         
         let router = Router()
@@ -151,7 +164,7 @@ class WebServer {
         isRunning = true
         
         print("🚀 NG Web Portal starting on http://127.0.0.1:8080")
-        print("📁 Serving files from: \(SiteManager.shared.siteFolder.path)")
+        print("📁 Serving files from: \(siteFolder.path)")
         
         serverTask = Task {
             do {

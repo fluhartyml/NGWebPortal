@@ -61,7 +61,7 @@ struct ServerView: View {
                     }
                     
                     Button("Open Site Folder") {
-                        SiteManager.shared.openSiteFolder()
+                        SiteManager.shared.revealSiteFolder()
                     }
                     .buttonStyle(.bordered)
                 } else {
@@ -74,7 +74,7 @@ struct ServerView: View {
                     .tint(.green)
                     
                     Button("Open Site Folder") {
-                        SiteManager.shared.openSiteFolder()
+                        SiteManager.shared.revealSiteFolder()
                     }
                     .buttonStyle(.bordered)
                 }

@@ -2,7 +2,7 @@
 //  SiteManager.swift
 //  NGWebPortal
 //
-//  Manages site folder structure and default template files
+//  Manages site folder structure and HTML templates
 //
 
 import Foundation
@@ -11,191 +11,112 @@ import AppKit
 class SiteManager {
     static let shared = SiteManager()
     
-    // Site folder location
-    var siteFolder: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return appSupport.appendingPathComponent("NGWebPortal/Sites/default")
+    private(set) var currentSiteFolder: URL?
+    
+    private init() {
+        initializeSiteFolder()
     }
     
-    // Initialize site folder structure
-    func initializeSiteFolder() throws {
-        let fileManager = FileManager.default
+    private func initializeSiteFolder() {
+        // Get app support directory
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            print("❌ Could not find Application Support directory")
+            return
+        }
         
-        // Create folder structure if it doesn't exist
-        if !fileManager.fileExists(atPath: siteFolder.path) {
-            try fileManager.createDirectory(at: siteFolder, withIntermediateDirectories: true)
+        // Create NGWebPortal/Sites/default structure
+        let sitesFolder = appSupport
+            .appendingPathComponent("NGWebPortal")
+            .appendingPathComponent("Sites")
+            .appendingPathComponent("default")
+        
+        do {
+            try FileManager.default.createDirectory(at: sitesFolder, withIntermediateDirectories: true)
+            currentSiteFolder = sitesFolder
             
-            // Create subfolders
-            try fileManager.createDirectory(at: siteFolder.appendingPathComponent("blog"), withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: siteFolder.appendingPathComponent("portfolio"), withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: siteFolder.appendingPathComponent("css"), withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: siteFolder.appendingPathComponent("js"), withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: siteFolder.appendingPathComponent("images"), withIntermediateDirectories: true)
+            // Create initial structure
+            try createInitialStructure(at: sitesFolder)
             
-            // Create default files
-            try createDefaultFiles()
+            print("✅ Site folder initialized: \(sitesFolder.path)")
+        } catch {
+            print("❌ Failed to create site folder: \(error)")
         }
     }
     
-    // Create default HTML and CSS files
-    private func createDefaultFiles() throws {
-        // index.html
-        try defaultIndexHTML.write(to: siteFolder.appendingPathComponent("index.html"), atomically: true, encoding: .utf8)
+    private func createInitialStructure(at siteFolder: URL) throws {
+        let fileManager = FileManager.default
         
-        // about.html
-        try defaultAboutHTML.write(to: siteFolder.appendingPathComponent("about.html"), atomically: true, encoding: .utf8)
+        // Create subdirectories
+        let subdirs = ["blog", "images", "css", "js"]
+        for dir in subdirs {
+            let dirURL = siteFolder.appendingPathComponent(dir)
+            if !fileManager.fileExists(atPath: dirURL.path) {
+                try fileManager.createDirectory(at: dirURL, withIntermediateDirectories: true)
+            }
+        }
         
-        // blog/index.html
-        try defaultBlogHTML.write(to: siteFolder.appendingPathComponent("blog/index.html"), atomically: true, encoding: .utf8)
+        // Create index.html if it doesn't exist
+        let indexURL = siteFolder.appendingPathComponent("index.html")
+        if !fileManager.fileExists(atPath: indexURL.path) {
+            let indexHTML = generateIndexHTML()
+            try indexHTML.write(to: indexURL, atomically: true, encoding: .utf8)
+        }
         
-        // portfolio/index.html
-        try defaultPortfolioHTML.write(to: siteFolder.appendingPathComponent("portfolio/index.html"), atomically: true, encoding: .utf8)
+        // Create styles.css if it doesn't exist
+        let cssURL = siteFolder.appendingPathComponent("styles.css")
+        if !fileManager.fileExists(atPath: cssURL.path) {
+            let css = generateDefaultCSS()
+            try css.write(to: cssURL, atomically: true, encoding: .utf8)
+        }
         
-        // css/style.css
-        try defaultCSS.write(to: siteFolder.appendingPathComponent("css/style.css"), atomically: true, encoding: .utf8)
+        // Create blog index if it doesn't exist
+        let blogIndexURL = siteFolder.appendingPathComponent("blog/index.html")
+        if !fileManager.fileExists(atPath: blogIndexURL.path) {
+            try TemplateEngine.shared.updateBlogIndex(siteFolder: siteFolder)
+        }
+        
+        print("✅ Site folder initialized successfully")
     }
     
-    // Open site folder in Finder
-    func openSiteFolder() {
-        NSWorkspace.shared.open(siteFolder)
-    }
-    
-    // Default HTML Templates
-    private var defaultIndexHTML: String {
-        """
+    private func generateIndexHTML() -> String {
+        return """
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>NG Web Portal</title>
-            <link rel="stylesheet" href="/css/style.css">
+            <title>NightGard - Home</title>
+            <link rel="stylesheet" href="styles.css">
         </head>
         <body>
-            <header>
-                <h1>Welcome to NG Web Portal</h1>
-                <nav>
-                    <a href="/">Home</a>
-                    <a href="/about.html">About</a>
-                    <a href="/blog/">Blog</a>
-                    <a href="/portfolio/">Portfolio</a>
-                </nav>
-            </header>
-            <main>
-                <section class="hero">
-                    <h2>Your Site, Your Way</h2>
-                    <p>Edit this file at: <code>~/Library/Application Support/NGWebPortal/Sites/default/index.html</code></p>
-                    <p>Click "Open Site Folder" in the app to start customizing!</p>
-                </section>
-            </main>
-            <footer>
-                <p>&copy; 2025 Powered by NG Web Portal</p>
-            </footer>
+            <div class="container">
+                <header>
+                    <h1>Welcome to NightGard</h1>
+                    <nav>
+                        <a href="index.html">Home</a>
+                        <a href="blog/index.html">Blog</a>
+                    </nav>
+                </header>
+                
+                <main>
+                    <section class="hero">
+                        <h2>Your Personal Web Portal</h2>
+                        <p>Share your thoughts, stories, and ideas with the world.</p>
+                        <a href="blog/index.html" class="cta-button">Read the Blog</a>
+                    </section>
+                </main>
+                
+                <footer>
+                    <p>&copy; 2025 NightGard. All rights reserved.</p>
+                </footer>
+            </div>
         </body>
         </html>
         """
     }
     
-    private var defaultAboutHTML: String {
-        """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>About - NG Web Portal</title>
-            <link rel="stylesheet" href="/css/style.css">
-        </head>
-        <body>
-            <header>
-                <h1>About</h1>
-                <nav>
-                    <a href="/">Home</a>
-                    <a href="/about.html">About</a>
-                    <a href="/blog/">Blog</a>
-                    <a href="/portfolio/">Portfolio</a>
-                </nav>
-            </header>
-            <main>
-                <article>
-                    <h2>About Me</h2>
-                    <p>This is your about page. Edit it to tell your story!</p>
-                </article>
-            </main>
-            <footer>
-                <p>&copy; 2025 Powered by NG Web Portal</p>
-            </footer>
-        </body>
-        </html>
-        """
-    }
-    
-    private var defaultBlogHTML: String {
-        """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Blog - NG Web Portal</title>
-            <link rel="stylesheet" href="/css/style.css">
-        </head>
-        <body>
-            <header>
-                <h1>Blog</h1>
-                <nav>
-                    <a href="/">Home</a>
-                    <a href="/about.html">About</a>
-                    <a href="/blog/">Blog</a>
-                    <a href="/portfolio/">Portfolio</a>
-                </nav>
-            </header>
-            <main>
-                <h2>Recent Posts</h2>
-                <p>No posts yet. Start writing!</p>
-            </main>
-            <footer>
-                <p>&copy; 2025 Powered by NG Web Portal</p>
-            </footer>
-        </body>
-        </html>
-        """
-    }
-    
-    private var defaultPortfolioHTML: String {
-        """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Portfolio - NG Web Portal</title>
-            <link rel="stylesheet" href="/css/style.css">
-        </head>
-        <body>
-            <header>
-                <h1>Portfolio</h1>
-                <nav>
-                    <a href="/">Home</a>
-                    <a href="/about.html">About</a>
-                    <a href="/blog/">Blog</a>
-                    <a href="/portfolio/">Portfolio</a>
-                </nav>
-            </header>
-            <main>
-                <h2>My Work</h2>
-                <p>Showcase your projects here!</p>
-            </main>
-            <footer>
-                <p>&copy; 2025 Powered by NG Web Portal</p>
-            </footer>
-        </body>
-        </html>
-        """
-    }
-    
-    private var defaultCSS: String {
-        """
+    private func generateDefaultCSS() -> String {
+        return """
         * {
             margin: 0;
             padding: 0;
@@ -203,74 +124,96 @@ class SiteManager {
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             line-height: 1.6;
             color: #333;
-            background: #fff;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            min-height: 100vh;
         }
         
         header {
-            background: #007AFF;
-            color: white;
-            padding: 2rem;
-            text-align: center;
+            padding: 40px 0;
+            border-bottom: 2px solid #007AFF;
+            margin-bottom: 40px;
         }
         
         header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
+            font-size: 36px;
+            margin-bottom: 20px;
         }
         
         nav {
             display: flex;
-            gap: 2rem;
-            justify-content: center;
+            gap: 20px;
         }
         
         nav a {
-            color: white;
+            color: #007AFF;
             text-decoration: none;
             font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background 0.2s;
         }
         
         nav a:hover {
-            text-decoration: underline;
+            background: #f0f0f0;
         }
         
         main {
-            max-width: 800px;
-            margin: 3rem auto;
-            padding: 0 2rem;
-        }
-        
-        h2 {
-            font-size: 2rem;
-            margin-bottom: 1rem;
-            color: #007AFF;
-        }
-        
-        p {
-            margin-bottom: 1rem;
-        }
-        
-        code {
-            background: #f5f5f5;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.9rem;
+            padding: 40px 0;
         }
         
         .hero {
             text-align: center;
-            padding: 3rem 0;
+            padding: 60px 20px;
+        }
+        
+        .hero h2 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .hero p {
+            font-size: 20px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #007AFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        
+        .cta-button:hover {
+            background: #0051D5;
         }
         
         footer {
+            margin-top: 60px;
+            padding: 40px 0;
+            border-top: 1px solid #eee;
             text-align: center;
-            padding: 2rem;
-            background: #f5f5f5;
-            margin-top: 4rem;
+            color: #999;
         }
         """
+    }
+    
+    func revealSiteFolder() {
+        guard let folder = currentSiteFolder else { return }
+        NSWorkspace.shared.selectFile(nil as String?, inFileViewerRootedAtPath: folder.path)
     }
 }
