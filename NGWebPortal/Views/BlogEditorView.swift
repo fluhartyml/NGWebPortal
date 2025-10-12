@@ -5,12 +5,9 @@
 //  Blog post editor with WYSIWYG rich text editing
 //
 
-// Depends on RichTextEditorView (see RichTextEditor.swift)
-
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-import AppKit
 
 struct BlogEditorView: View {
     @Environment(\.modelContext) private var modelContext
@@ -41,6 +38,7 @@ struct BlogEditorView: View {
             if let post = selectedPost {
                 PostEditor(
                     post: post,
+                    posts: posts,
                     showingImagePicker: $showingImagePicker,
                     showingPublishConfirmation: $showingPublishConfirmation,
                     showingDeleteConfirmation: $showingDeleteConfirmation
@@ -117,6 +115,7 @@ struct PostListItem: View {
 
 struct PostEditor: View {
     @Bindable var post: BlogPost
+    let posts: [BlogPost]
     @Binding var showingImagePicker: Bool
     @Binding var showingPublishConfirmation: Bool
     @Binding var showingDeleteConfirmation: Bool
@@ -126,11 +125,13 @@ struct PostEditor: View {
     
     init(
         post: BlogPost,
+        posts: [BlogPost],
         showingImagePicker: Binding<Bool>,
         showingPublishConfirmation: Binding<Bool>,
         showingDeleteConfirmation: Binding<Bool>
     ) {
         self.post = post
+        self.posts = posts
         self._showingImagePicker = showingImagePicker
         self._showingPublishConfirmation = showingPublishConfirmation
         self._showingDeleteConfirmation = showingDeleteConfirmation
@@ -260,15 +261,41 @@ struct PostEditor: View {
     
     private func removeImage() {
         post.featuredImageData = nil
+        try? modelContext.save()
     }
     
     private func handleImageSelection(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result,
-              let url = urls.first,
-              let imageData = try? Data(contentsOf: url) else {
+              let url = urls.first else {
+            print("❌ Image selection failed or cancelled")
             return
         }
-        post.featuredImageData = imageData
+        
+        // Start accessing security-scoped resource
+        guard url.startAccessingSecurityScopedResource() else {
+            print("❌ Could not access security-scoped resource")
+            return
+        }
+        
+        defer {
+            url.stopAccessingSecurityScopedResource()
+        }
+        
+        // Load image data
+        do {
+            let imageData = try Data(contentsOf: url)
+            print("✅ Image loaded: \(imageData.count) bytes")
+            
+            // Update the post's image data
+            post.featuredImageData = imageData
+            
+            // Save to database
+            try? modelContext.save()
+            print("✅ Image saved to post")
+            
+        } catch {
+            print("❌ Error loading image: \(error.localizedDescription)")
+        }
     }
     
     private func saveDraft() {
@@ -283,6 +310,9 @@ struct PostEditor: View {
         
         // Generate HTML file
         generateHTML()
+        
+        // Regenerate blog list index
+        regenerateBlogIndex()
     }
     
     private func deletePost() {
@@ -295,10 +325,30 @@ struct PostEditor: View {
         
         // Get settings for accent color
         let html = generateBlogPostHTML()
-        let filename = "\(post.filename).html"
+        
+        // Fix: Remove .html if it's already in the filename
+        var cleanFilename = post.filename
+        if cleanFilename.hasSuffix(".html") {
+            cleanFilename = String(cleanFilename.dropLast(5))
+        }
+        let filename = "\(cleanFilename).html"
+        
         siteManager.saveBlogPost(filename: filename, html: html)
         
         print("✅ Published: \(post.title)")
+    }
+    
+    private func regenerateBlogIndex() {
+        let siteManager = SiteManager.shared
+        
+        // Get all published posts
+        let publishedPosts = posts.filter { !$0.isDraft }
+        
+        // Generate blog list HTML
+        let blogListHTML = generateBlogListHTML(posts: publishedPosts)
+        siteManager.saveBlogPost(filename: "index.html", html: blogListHTML)
+        
+        print("✅ Regenerated blog index with \(publishedPosts.count) posts")
     }
     
     private func generateBlogPostHTML() -> String {
@@ -461,6 +511,194 @@ struct PostEditor: View {
                     \(post.content)
                 </div>
                 <a href="/blog/index.html" class="back-link">← Back to Blog</a>
+            </div>
+            <footer>
+                <p>&copy; 2025 \(siteName). Powered by NG Web Portal</p>
+            </footer>
+        </body>
+        </html>
+        """
+    }
+    
+    private func generateBlogListHTML(posts: [BlogPost]) -> String {
+        let siteName = "NG Web Portal"
+        let siteTagline = "Welcome to my website"
+        let accentColor = "#007AFF"
+        
+        let postsHTML = posts.map { post in
+            var imageHTML = ""
+            if let imageData = post.featuredImageData {
+                let base64String = imageData.base64EncodedString()
+                imageHTML = """
+                <img src="data:image/jpeg;base64,\(base64String)" alt="\(post.title)">
+                """
+            }
+            
+            // Fix filename for link
+            var cleanFilename = post.filename
+            if cleanFilename.hasSuffix(".html") {
+                cleanFilename = String(cleanFilename.dropLast(5))
+            }
+            
+            return """
+            <article class="post-card">
+                <div class="post-image">
+                    \(imageHTML)
+                </div>
+                <div class="post-content">
+                    <h2><a href="\(cleanFilename).html">\(post.title)</a></h2>
+                    <p class="post-subtitle">\(post.subtitle)</p>
+                    <a href="\(cleanFilename).html" class="read-more">Read More →</a>
+                </div>
+            </article>
+            """
+        }.joined(separator: "\n")
+        
+        return """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Blog - \(siteName)</title>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background: #fff;
+                }
+                
+                header {
+                    background: \(accentColor);
+                    color: white;
+                    padding: 2rem;
+                    text-align: center;
+                }
+                
+                header h1 {
+                    font-size: 2.5rem;
+                    margin-bottom: 0.5rem;
+                }
+                
+                nav {
+                    display: flex;
+                    gap: 2rem;
+                    justify-content: center;
+                    margin-top: 1rem;
+                }
+                
+                nav a {
+                    color: white;
+                    text-decoration: none;
+                    font-weight: 500;
+                }
+                
+                nav a:hover {
+                    text-decoration: underline;
+                }
+                
+                .container {
+                    max-width: 1200px;
+                    margin: 3rem auto;
+                    padding: 0 2rem;
+                }
+                
+                .posts-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+                    gap: 2rem;
+                }
+                
+                .post-card {
+                    background: white;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }
+                
+                .post-card:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }
+                
+                .post-image {
+                    width: 100%;
+                    height: 200px;
+                    overflow: hidden;
+                    background: #f5f5f5;
+                }
+                
+                .post-image img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+                
+                .post-content {
+                    padding: 1.5rem;
+                }
+                
+                .post-content h2 {
+                    font-size: 1.5rem;
+                    margin-bottom: 0.5rem;
+                }
+                
+                .post-content h2 a {
+                    color: #333;
+                    text-decoration: none;
+                }
+                
+                .post-content h2 a:hover {
+                    color: \(accentColor);
+                }
+                
+                .post-subtitle {
+                    color: #666;
+                    margin-bottom: 1rem;
+                    font-size: 0.95rem;
+                }
+                
+                .read-more {
+                    color: \(accentColor);
+                    text-decoration: none;
+                    font-weight: 500;
+                }
+                
+                .read-more:hover {
+                    text-decoration: underline;
+                }
+                
+                footer {
+                    text-align: center;
+                    padding: 2rem;
+                    background: #f5f5f5;
+                    margin-top: 4rem;
+                }
+            </style>
+        </head>
+        <body>
+            <header>
+                <h1>\(siteName)</h1>
+                <p>\(siteTagline)</p>
+                <nav>
+                    <a href="/index.html">Home</a>
+                    <a href="/blog/index.html">Blog</a>
+                    <a href="/about.html">About</a>
+                    <a href="/portfolio.html">Portfolio</a>
+                </nav>
+            </header>
+            <div class="container">
+                <div class="posts-grid">
+                    \(postsHTML)
+                </div>
             </div>
             <footer>
                 <p>&copy; 2025 \(siteName). Powered by NG Web Portal</p>
