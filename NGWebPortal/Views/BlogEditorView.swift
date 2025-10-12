@@ -2,11 +2,12 @@
 //  BlogEditorView.swift
 //  NGWebPortal
 //
-//  Blog post creation and management interface
+//  Complete blog post editor with iWeb-inspired layout
 //
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct BlogEditorView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,170 +15,279 @@ struct BlogEditorView: View {
     
     @State private var selectedPost: BlogPost?
     @State private var isCreatingNew = false
-    @State private var editTitle = ""
-    @State private var editContent = ""
-    @State private var editAuthor = ""
-    @State private var editIsPublished = false
-    @State private var showingDeleteAlert = false
     
     var body: some View {
         HSplitView {
-            // Left sidebar - post list
+            // Left sidebar - Post list
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("Blog Posts")
                         .font(.headline)
-                        .padding()
                     Spacer()
                     Button(action: createNewPost) {
                         Image(systemName: "plus")
                     }
                     .buttonStyle(.borderless)
-                    .padding(.trailing)
                 }
-                .background(Color.gray.opacity(0.1))
+                .padding()
                 
-                List(selection: $selectedPost) {
-                    ForEach(posts) { post in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(post.title)
-                                .font(.headline)
-                            HStack {
-                                Text(post.formattedDate)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if post.isPublished {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                        .font(.caption)
-                                }
-                            }
-                        }
-                        .tag(post)
+                Divider()
+                
+                if posts.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("No posts yet")
+                            .foregroundStyle(.secondary)
+                        Text("Click + to create your first post")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    List(posts, selection: $selectedPost) { post in
+                        PostListItem(post: post)
                     }
                 }
-                .listStyle(.sidebar)
             }
-            .frame(minWidth: 200, idealWidth: 250)
+            .frame(minWidth: 250, maxWidth: 300)
             
-            // Right side - post editor
+            // Right side - Post editor
             if let post = selectedPost {
-                postEditorView(post: post)
+                PostEditorForm(post: post)
             } else {
                 VStack {
+                    Spacer()
                     Text("Select a post to edit or create a new one")
                         .foregroundStyle(.secondary)
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onChange(of: selectedPost) { oldValue, newValue in
-            if let post = newValue {
-                loadPostForEditing(post)
-            }
-        }
-    }
-    
-    private func postEditorView(post: BlogPost) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Title
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Title")
-                    .font(.headline)
-                TextField("Post Title", text: $editTitle)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            // Author
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Author")
-                    .font(.headline)
-                TextField("Author Name", text: $editAuthor)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            // Published toggle
-            Toggle("Published", isOn: $editIsPublished)
-                .toggleStyle(.switch)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Content")
-                    .font(.headline)
-                
-                RichTextEditor(html: $editContent)
-                    .frame(maxHeight: .infinity)
-                    .border(Color.gray.opacity(0.3), width: 1)
-                    .cornerRadius(4)
-            }
-            
-            // Action buttons
-            HStack(spacing: 15) {
-                Button("Save Changes") {
-                    savePost(post)
-                }
-                .buttonStyle(.borderedProminent)
-                
-                Button("Delete Post") {
-                    showingDeleteAlert = true
-                }
-                .buttonStyle(.bordered)
-                .foregroundColor(.red)
-                
-                Spacer()
-                
-                Text("Last updated: \(post.updatedAt.formatted())")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(30)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .alert("Delete Post?", isPresented: $showingDeleteAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
-                deletePost(post)
-            }
-        } message: {
-            Text("Are you sure you want to delete \"\(post.title)\"? This cannot be undone.")
-        }
     }
     
     private func createNewPost() {
-        let newPost = BlogPost(
-            title: "New Post",
-            author: "Author"
-        )
+        let newPost = BlogPost()
         modelContext.insert(newPost)
-        try? modelContext.save()
         selectedPost = newPost
     }
+}
+
+// MARK: - Post List Item
+struct PostListItem: View {
+    let post: BlogPost
     
-    private func loadPostForEditing(_ post: BlogPost) {
-        editTitle = post.title
-        editContent = post.contentHTML
-        editAuthor = post.author
-        editIsPublished = post.isPublished
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(post.title.isEmpty ? "Untitled Post" : post.title)
+                .font(.headline)
+                .lineLimit(1)
+            
+            Text(post.subtitle.isEmpty ? "No subtitle" : post.subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            
+            HStack {
+                if post.isDraft {
+                    Text("Draft")
+                        .font(.caption2)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.2))
+                        .foregroundColor(.orange)
+                        .cornerRadius(4)
+                }
+                
+                Text(post.publishedDate, style: .date)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Post Editor Form
+struct PostEditorForm: View {
+    @Bindable var post: BlogPost
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var showingImagePicker = false
+    @State private var showingPublishConfirmation = false
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                
+                // Featured Image Section
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Featured Image")
+                        .font(.headline)
+                    
+                    if let image = post.featuredImage {
+                        ZStack(alignment: .topTrailing) {
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 300)
+                                .frame(maxWidth: .infinity)
+                                .clipped()
+                                .cornerRadius(8)
+                            
+                            Button(action: removeImage) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.white)
+                                    .background(Circle().fill(Color.black.opacity(0.5)))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(8)
+                        }
+                    } else {
+                        Button(action: { showingImagePicker = true }) {
+                            VStack(spacing: 12) {
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(.secondary)
+                                Text("Choose Featured Image")
+                                    .font(.headline)
+                                Text("This image will inspire your post")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 200)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                
+                Divider()
+                
+                // Title
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Title")
+                        .font(.headline)
+                    TextField("Enter your blog post title...", text: $post.title)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 28, weight: .bold))
+                }
+                
+                // Subtitle/Synopsis
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Subtitle / Synopsis")
+                        .font(.headline)
+                    TextField("Brief introduction or synopsis...", text: $post.subtitle)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                }
+                
+                Divider()
+                
+                // Content
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Content")
+                        .font(.headline)
+                    
+                    TextEditor(text: $post.content)
+                        .font(.system(size: 16))
+                        .frame(minHeight: 400)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.gray.opacity(0.05))
+                        .cornerRadius(8)
+                }
+                
+                Divider()
+                
+                // Action Buttons
+                HStack(spacing: 12) {
+                    Button("Delete Post") {
+                        deletePost()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    
+                    Spacer()
+                    
+                    if post.isDraft {
+                        Button("Save Draft") {
+                            saveDraft()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    
+                    Button(post.isDraft ? "Publish" : "Update") {
+                        showingPublishConfirmation = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(post.title.isEmpty)
+                }
+                .padding(.vertical)
+            }
+            .padding(40)
+        }
+        .fileImporter(
+            isPresented: $showingImagePicker,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: false
+        ) { result in
+            handleImageSelection(result)
+        }
+        .alert("Publish Post?", isPresented: $showingPublishConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Publish") {
+                publishPost()
+            }
+        } message: {
+            Text("This will make your post visible on your website.")
+        }
     }
     
-    private func savePost(_ post: BlogPost) {
-        post.title = editTitle
-        post.contentHTML = editContent
-        post.author = editAuthor
-        post.isPublished = editIsPublished
-        post.markUpdated()
-        
+    private func removeImage() {
+        post.featuredImageData = nil
+    }
+    
+    private func handleImageSelection(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result,
+              let url = urls.first,
+              let imageData = try? Data(contentsOf: url) else {
+            return
+        }
+        post.featuredImageData = imageData
+    }
+    
+    private func saveDraft() {
+        post.isDraft = true
         try? modelContext.save()
     }
     
-    private func deletePost(_ post: BlogPost) {
+    private func publishPost() {
+        post.isDraft = false
+        post.publishedDate = Date()
+        try? modelContext.save()
+        
+        // TODO: Generate HTML file
+        generateHTML()
+    }
+    
+    private func deletePost() {
         modelContext.delete(post)
         try? modelContext.save()
-        selectedPost = nil
+    }
+    
+    private func generateHTML() {
+        // TODO: Implement HTML generation using TemplateEngine
+        print("📝 Generating HTML for: \(post.title)")
+        print("📁 Filename: \(post.filename)")
     }
 }
 
 #Preview {
     BlogEditorView()
-        .modelContainer(for: BlogPost.self, inMemory: true)
+        .modelContainer(for: BlogPost.self)
 }
