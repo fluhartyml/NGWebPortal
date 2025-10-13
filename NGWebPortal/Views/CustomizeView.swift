@@ -61,58 +61,83 @@ struct CustomizeView: View {
                         
                         Divider()
                         
-                        Toggle("Use Logo Instead of Site Name", isOn: $useLogo)
-                            .toggleStyle(.switch)
-                        
-                        if useLogo {
-                            VStack(alignment: .leading, spacing: 10) {
-                                // Logo Preview
-                                if let image = logoImage {
-                                    HStack {
-                                        Image(nsImage: image)
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(height: 80)
-                                            .background(Color.gray.opacity(0.1))
-                                            .cornerRadius(8)
-                                        
-                                        Spacer()
-                                        
-                                        Button("Remove Logo") {
-                                            logoImage = nil
-                                            logoFileName = ""
-                                        }
-                                        .buttonStyle(.borderedProminent)
-                                        .tint(.red)
-                                    }
-                                } else {
-                                    // No logo yet
-                                    HStack {
-                                        Image(systemName: "photo.badge.plus")
-                                            .font(.system(size: 40))
-                                            .foregroundColor(.gray)
-                                            .frame(width: 80, height: 80)
-                                            .background(Color.gray.opacity(0.1))
-                                            .cornerRadius(8)
-                                        
-                                        Text("No logo selected")
+                        // Logo Section - Always visible
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Company Logo")
+                                .font(.headline)
+                            
+                            // Logo Preview
+                            if let image = logoImage {
+                                HStack {
+                                    Image(nsImage: image)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(height: 80)
+                                        .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(8)
+                                    
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(logoFileName)
+                                            .font(.caption)
                                             .foregroundColor(.secondary)
                                         
-                                        Spacer()
+                                        HStack {
+                                            Button("Change Logo...") {
+                                                selectLogoImage()
+                                            }
+                                            
+                                            Button("Remove Logo") {
+                                                logoImage = nil
+                                                logoFileName = ""
+                                                // Restore default app icon
+                                                NSApp.applicationIconImage = nil
+                                                print("✅ Logo removed, app icon restored to default")
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .tint(.red)
+                                        }
                                     }
+                                    
+                                    Spacer()
                                 }
-                                
-                                Button("Choose Logo Image...") {
-                                    selectLogoImage()
+                            } else {
+                                // No logo yet
+                                HStack {
+                                    Image(systemName: "photo.badge.plus")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(.gray)
+                                        .frame(width: 80, height: 80)
+                                        .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(8)
+                                    
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text("No logo uploaded")
+                                            .foregroundColor(.secondary)
+                                        
+                                        Button("Choose Logo Image...") {
+                                            selectLogoImage()
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                    }
+                                    
+                                    Spacer()
                                 }
-                                .buttonStyle(.borderedProminent)
-                                
-                                Text("Logo will appear in header, footer, and as favicon. Recommended: Square image, 512x512px or larger.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
                             }
-                            .padding(.top, 5)
+                            
+                            Text("Logo appears in header, footer, and as app icon. Recommended: Square image, 512x512px or larger.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
+                        
+                        Divider()
+                        
+                        // Display options - separate from logo upload
+                        Toggle("Hide Company Name in Header", isOn: $useLogo)
+                            .toggleStyle(.switch)
+                        
+                        Text("When enabled, only the logo will appear in the header (no text).")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     .padding()
                 }
@@ -296,6 +321,8 @@ struct CustomizeView: View {
     func loadLogoImage() {
         guard !logoFileName.isEmpty else {
             logoImage = nil
+            // Restore default app icon when no logo
+            NSApp.applicationIconImage = nil
             return
         }
         
@@ -304,6 +331,12 @@ struct CustomizeView: View {
         
         if FileManager.default.fileExists(atPath: logoPath) {
             logoImage = NSImage(contentsOfFile: logoPath)
+            
+            // Restore custom app icon if logo exists
+            if let appIcon = logoImage {
+                NSApp.applicationIconImage = appIcon
+                print("✅ App icon restored from saved logo")
+            }
         }
     }
     
@@ -328,23 +361,43 @@ struct CustomizeView: View {
     func copyLogoToSite(from sourceURL: URL) {
         guard let settings = currentAppSettings else { return }
         
+        // Start accessing security-scoped resource
+        guard sourceURL.startAccessingSecurityScopedResource() else {
+            print("❌ Failed to access security-scoped resource")
+            return
+        }
+        defer { sourceURL.stopAccessingSecurityScopedResource() }
+        
         let imagesDir = (settings.outputDirectory as NSString).expandingTildeInPath + "/images"
-        let fileName = "logo-\(UUID().uuidString).\(sourceURL.pathExtension)"
-        let destinationPath = (imagesDir as NSString).appendingPathComponent(fileName)
+        let fileName = "logo.\(sourceURL.pathExtension)"
+        let destinationURL = URL(fileURLWithPath: (imagesDir as NSString).appendingPathComponent(fileName))
         
         do {
             // Ensure images directory exists
             try FileManager.default.createDirectory(atPath: imagesDir, withIntermediateDirectories: true)
             
+            // Remove old logo if it exists
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+            
             // Copy file
-            try FileManager.default.copyItem(atPath: sourceURL.path, toPath: destinationPath)
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            
+            print("✅ Logo copied successfully to: \(destinationURL.path)")
             
             // Update state
             logoFileName = fileName
-            logoImage = NSImage(contentsOfFile: destinationPath)
+            logoImage = NSImage(contentsOf: destinationURL)
+            
+            // Set as app icon in Dock
+            if let appIcon = logoImage {
+                NSApp.applicationIconImage = appIcon
+                print("✅ App icon updated in Dock")
+            }
             
         } catch {
-            print("Error copying logo: \(error)")
+            print("❌ Error copying logo: \(error)")
         }
     }
     
