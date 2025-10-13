@@ -17,9 +17,8 @@ class TemplateEngine {
         self.modelContext = modelContext
     }
     
-    private func getSettings() -> AppSettings? {
-        let descriptor = FetchDescriptor<AppSettings>()
-        return try? modelContext.fetch(descriptor).first
+    private func getSettings() -> SiteSettings {
+        return SettingsManager.shared.loadSettings()
     }
     
     // MARK: - Save Featured Image to Disk
@@ -49,8 +48,8 @@ class TemplateEngine {
     
     func generateBlogListHTML(posts: [BlogPost]) -> String {
         let settings = getSettings()
-        let blogTitle = settings?.blogTitle ?? "blog"
-        let blogTagline = settings?.blogTagline ?? "thoughts, stories, and ideas"
+        let blogTitle = settings.blogTitle
+        let blogTagline = settings.blogTagline
         
         let postsHTML = posts.map { post in
             let featuredImageHTML: String
@@ -248,7 +247,7 @@ class TemplateEngine {
     
     func generateBlogPostHTML(post: BlogPost, allPosts: [BlogPost]) -> String {
         let settings = getSettings()
-        let blogTitle = settings?.blogTitle ?? "blog"
+        let blogTitle = settings.blogTitle
         
         // Find previous and next posts
         let sortedPosts = allPosts.sorted { $0.publishedDate > $1.publishedDate }

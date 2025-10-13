@@ -6,38 +6,17 @@
 //
 
 import SwiftUI
-import SwiftData
 import AppKit
 import UniformTypeIdentifiers
 
 struct CustomizeView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var appSettings: [AppSettings]
-    @Query private var allPosts: [BlogPost]
+    @State private var settings: SiteSettings = .default
     
-    @State private var siteName: String = ""
-    @State private var tagline: String = ""
-    @State private var authorName: String = ""
-    @State private var useLogo: Bool = false
-    @State private var logoFileName: String = ""
     @State private var logoImage: NSImage?
     @State private var accentColorRed: Double = 0.0
     @State private var accentColorGreen: Double = 0.478
     @State private var accentColorBlue: Double = 1.0
-    @State private var blogTitle: String = ""
-    @State private var blogTagline: String = ""
-    @State private var homeHeroTitle: String = ""
-    @State private var homeHeroSubtitle: String = ""
-    @State private var homeCtaText: String = ""
-    @State private var aboutTitle: String = ""
-    @State private var aboutContent: String = ""
-    @State private var portfolioTitle: String = ""
-    @State private var portfolioTagline: String = ""
     @State private var showingSavedAlert = false
-    
-    var currentAppSettings: AppSettings? {
-        return appSettings.first
-    }
     
     var body: some View {
         ScrollView {
@@ -50,13 +29,13 @@ struct CustomizeView: View {
                 // MARK: - Branding Section
                 GroupBox("Branding") {
                     VStack(alignment: .leading, spacing: 15) {
-                        TextField("Site Name:", text: $siteName)
+                        TextField("Site Name:", text: $settings.siteName)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Tagline:", text: $tagline)
+                        TextField("Tagline:", text: $settings.siteTagline)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Author Name:", text: $authorName)
+                        TextField("Author Name:", text: $settings.authorName)
                             .textFieldStyle(.roundedBorder)
                         
                         Divider()
@@ -77,7 +56,7 @@ struct CustomizeView: View {
                                         .cornerRadius(8)
                                     
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(logoFileName)
+                                        Text(settings.logoFileName)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                         
@@ -88,7 +67,7 @@ struct CustomizeView: View {
                                             
                                             Button("Remove Logo") {
                                                 logoImage = nil
-                                                logoFileName = ""
+                                                settings.logoFileName = ""
                                                 // Restore default app icon
                                                 NSApp.applicationIconImage = nil
                                                 print("✅ Logo removed, app icon restored to default")
@@ -132,7 +111,7 @@ struct CustomizeView: View {
                         Divider()
                         
                         // Display options - separate from logo upload
-                        Toggle("Hide Company Name in Header", isOn: $useLogo)
+                        Toggle("Hide Company Name in Header", isOn: $settings.useLogo)
                             .toggleStyle(.switch)
                         
                         Text("When enabled, only the logo will appear in the header (no text).")
@@ -189,10 +168,10 @@ struct CustomizeView: View {
                 // MARK: - Blog Settings
                 GroupBox("Blog") {
                     VStack(alignment: .leading, spacing: 15) {
-                        TextField("Blog Title:", text: $blogTitle)
+                        TextField("Blog Title:", text: $settings.blogTitle)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Blog Tagline:", text: $blogTagline)
+                        TextField("Blog Tagline:", text: $settings.blogTagline)
                             .textFieldStyle(.roundedBorder)
                     }
                     .padding()
@@ -201,13 +180,13 @@ struct CustomizeView: View {
                 // MARK: - Home Page Settings
                 GroupBox("Home Page") {
                     VStack(alignment: .leading, spacing: 15) {
-                        TextField("Hero Title:", text: $homeHeroTitle)
+                        TextField("Hero Title:", text: $settings.homeHeroTitle)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Hero Subtitle:", text: $homeHeroSubtitle)
+                        TextField("Hero Subtitle:", text: $settings.homeHeroSubtitle)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Call-to-Action Button:", text: $homeCtaText)
+                        TextField("Call-to-Action Button:", text: $settings.homeCtaText)
                             .textFieldStyle(.roundedBorder)
                     }
                     .padding()
@@ -216,13 +195,13 @@ struct CustomizeView: View {
                 // MARK: - About Page Settings
                 GroupBox("About Page") {
                     VStack(alignment: .leading, spacing: 15) {
-                        TextField("About Title:", text: $aboutTitle)
+                        TextField("About Title:", text: $settings.aboutTitle)
                             .textFieldStyle(.roundedBorder)
                         
                         Text("About Content:")
                             .font(.headline)
                         
-                        TextEditor(text: $aboutContent)
+                        TextEditor(text: $settings.aboutContent)
                             .frame(height: 120)
                             .font(.system(.body, design: .default))
                             .border(Color.gray.opacity(0.3), width: 1)
@@ -233,10 +212,10 @@ struct CustomizeView: View {
                 // MARK: - Portfolio Settings
                 GroupBox("Portfolio") {
                     VStack(alignment: .leading, spacing: 15) {
-                        TextField("Portfolio Title:", text: $portfolioTitle)
+                        TextField("Portfolio Title:", text: $settings.portfolioTitle)
                             .textFieldStyle(.roundedBorder)
                         
-                        TextField("Portfolio Tagline:", text: $portfolioTagline)
+                        TextField("Portfolio Tagline:", text: $settings.portfolioTagline)
                             .textFieldStyle(.roundedBorder)
                     }
                     .padding()
@@ -262,72 +241,35 @@ struct CustomizeView: View {
         .alert("Settings Saved", isPresented: $showingSavedAlert) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Your settings have been saved. Restart the server to see changes.")
+            Text("Your settings have been saved and the website has been regenerated!")
         }
     }
     
     // MARK: - Load Settings
     func loadSettings() {
-        guard let settings = currentAppSettings else {
-            // Create default settings if none exist
-            let newSettings = AppSettings()
-            modelContext.insert(newSettings)
-            try? modelContext.save()
-            
-            siteName = newSettings.siteName
-            tagline = newSettings.siteTagline
-            authorName = newSettings.authorName
-            useLogo = newSettings.useLogo
-            logoFileName = newSettings.logoFileName
-            accentColorRed = newSettings.accentColorRed
-            accentColorGreen = newSettings.accentColorGreen
-            accentColorBlue = newSettings.accentColorBlue
-            blogTitle = newSettings.blogTitle
-            blogTagline = newSettings.blogTagline
-            homeHeroTitle = newSettings.homeHeroTitle
-            homeHeroSubtitle = newSettings.homeHeroSubtitle
-            homeCtaText = newSettings.homeCtaText
-            aboutTitle = newSettings.aboutTitle
-            aboutContent = newSettings.aboutContent
-            portfolioTitle = newSettings.portfolioTitle
-            portfolioTagline = newSettings.portfolioTagline
-            
-            loadLogoImage()
-            return
-        }
+        // Load from JSON
+        settings = SettingsManager.shared.loadSettings()
         
-        siteName = settings.siteName
-        tagline = settings.siteTagline
-        authorName = settings.authorName
-        useLogo = settings.useLogo
-        logoFileName = settings.logoFileName
-        accentColorRed = settings.accentColorRed
-        accentColorGreen = settings.accentColorGreen
-        accentColorBlue = settings.accentColorBlue
-        blogTitle = settings.blogTitle
-        blogTagline = settings.blogTagline
-        homeHeroTitle = settings.homeHeroTitle
-        homeHeroSubtitle = settings.homeHeroSubtitle
-        homeCtaText = settings.homeCtaText
-        aboutTitle = settings.aboutTitle
-        aboutContent = settings.aboutContent
-        portfolioTitle = settings.portfolioTitle
-        portfolioTagline = settings.portfolioTagline
+        // Update color sliders from hex
+        let rgb = SettingsManager.shared.rgbFromHex(settings.accentColor)
+        accentColorRed = rgb.red
+        accentColorGreen = rgb.green
+        accentColorBlue = rgb.blue
         
+        // Load logo image if exists
         loadLogoImage()
     }
     
     // MARK: - Load Logo Image
     func loadLogoImage() {
-        guard !logoFileName.isEmpty else {
+        guard !settings.logoFileName.isEmpty else {
             logoImage = nil
-            // Restore default app icon when no logo
             NSApp.applicationIconImage = nil
             return
         }
         
-        let imagesPath = (currentAppSettings?.outputDirectory as NSString?)?.expandingTildeInPath ?? ""
-        let logoPath = (imagesPath as NSString).appendingPathComponent("images/\(logoFileName)")
+        let imagesPath = (settings.outputDirectory as NSString).expandingTildeInPath
+        let logoPath = (imagesPath as NSString).appendingPathComponent("images/\(settings.logoFileName)")
         
         if FileManager.default.fileExists(atPath: logoPath) {
             logoImage = NSImage(contentsOfFile: logoPath)
@@ -342,6 +284,8 @@ struct CustomizeView: View {
     
     // MARK: - Select Logo Image
     func selectLogoImage() {
+        print("🔍 Opening file picker for logo selection...")
+        
         let panel = NSOpenPanel()
         panel.title = "Choose Logo Image"
         panel.allowsMultipleSelection = false
@@ -351,34 +295,51 @@ struct CustomizeView: View {
         panel.message = "Select an image to use as your site logo"
         
         panel.begin { response in
-            if response == .OK, let url = panel.url {
-                copyLogoToSite(from: url)
+            print("📁 File picker response: \(response == .OK ? "OK" : "Cancelled")")
+            
+            if response == .OK {
+                if let url = panel.url {
+                    print("📸 Selected file: \(url.path)")
+                    self.copyLogoToSite(from: url)
+                } else {
+                    print("❌ No URL returned from file picker")
+                }
+            } else {
+                print("⚠️ User cancelled file selection")
             }
         }
     }
     
     // MARK: - Copy Logo to Site
     func copyLogoToSite(from sourceURL: URL) {
-        guard let settings = currentAppSettings else { return }
+        print("🚀 Starting logo copy process...")
+        print("   Source: \(sourceURL.path)")
         
         // Start accessing security-scoped resource
         guard sourceURL.startAccessingSecurityScopedResource() else {
             print("❌ Failed to access security-scoped resource")
             return
         }
-        defer { sourceURL.stopAccessingSecurityScopedResource() }
+        defer {
+            sourceURL.stopAccessingSecurityScopedResource()
+            print("🔓 Released security-scoped resource")
+        }
         
         let imagesDir = (settings.outputDirectory as NSString).expandingTildeInPath + "/images"
         let fileName = "logo.\(sourceURL.pathExtension)"
         let destinationURL = URL(fileURLWithPath: (imagesDir as NSString).appendingPathComponent(fileName))
         
+        print("   Destination: \(destinationURL.path)")
+        
         do {
             // Ensure images directory exists
             try FileManager.default.createDirectory(atPath: imagesDir, withIntermediateDirectories: true)
+            print("✅ Images directory ready: \(imagesDir)")
             
             // Remove old logo if it exists
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
+                print("🗑️  Removed old logo")
             }
             
             // Copy file
@@ -387,45 +348,39 @@ struct CustomizeView: View {
             print("✅ Logo copied successfully to: \(destinationURL.path)")
             
             // Update state
-            logoFileName = fileName
+            settings.logoFileName = fileName
             logoImage = NSImage(contentsOf: destinationURL)
+            
+            print("✅ Logo loaded into preview")
             
             // Set as app icon in Dock
             if let appIcon = logoImage {
                 NSApp.applicationIconImage = appIcon
                 print("✅ App icon updated in Dock")
+            } else {
+                print("⚠️ Logo image failed to load for app icon")
             }
             
         } catch {
             print("❌ Error copying logo: \(error)")
+            print("   Error details: \(error.localizedDescription)")
         }
     }
     
     // MARK: - Save Settings
     func saveSettings() {
-        guard let settings = currentAppSettings else { return }
+        // Update accent color from sliders
+        settings.accentColor = SettingsManager.shared.hexFromRGB(
+            red: accentColorRed,
+            green: accentColorGreen,
+            blue: accentColorBlue
+        )
         
-        // Update all settings
-        settings.siteName = siteName
-        settings.siteTagline = tagline
-        settings.authorName = authorName
-        settings.useLogo = useLogo
-        settings.logoFileName = logoFileName
-        settings.accentColorRed = accentColorRed
-        settings.accentColorGreen = accentColorGreen
-        settings.accentColorBlue = accentColorBlue
-        settings.blogTitle = blogTitle
-        settings.blogTagline = blogTagline
-        settings.homeHeroTitle = homeHeroTitle
-        settings.homeHeroSubtitle = homeHeroSubtitle
-        settings.homeCtaText = homeCtaText
-        settings.aboutTitle = aboutTitle
-        settings.aboutContent = aboutContent
-        settings.portfolioTitle = portfolioTitle
-        settings.portfolioTagline = portfolioTagline
+        // Save to JSON
+        SettingsManager.shared.saveSettings(settings)
         
-        // Save to database
-        try? modelContext.save()
+        // Regenerate home page HTML
+        SiteManager.shared.regenerateHomePage(settings: settings)
         
         showingSavedAlert = true
     }
@@ -433,5 +388,4 @@ struct CustomizeView: View {
 
 #Preview {
     CustomizeView()
-        .modelContainer(for: [AppSettings.self, BlogPost.self])
 }

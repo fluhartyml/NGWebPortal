@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import SwiftData
 
 class SiteManager {
     static let shared = SiteManager()
@@ -74,20 +75,93 @@ class SiteManager {
         print("✅ Site folder initialized successfully")
     }
     
-    private func generateIndexHTML() -> String {
+    func regenerateHomePage(settings: SiteSettings) {
+        guard let siteFolder = currentSiteFolder else {
+            print("❌ Site folder not available")
+            return
+        }
+        
+        let indexURL = siteFolder.appendingPathComponent("index.html")
+        let html = generateIndexHTML(settings: settings)
+        
+        do {
+            try html.write(to: indexURL, atomically: true, encoding: .utf8)
+            print("✅ Home page regenerated with current settings")
+        } catch {
+            print("❌ Failed to regenerate home page: \(error)")
+        }
+    }
+    
+    private func generateIndexHTML(settings: SiteSettings? = nil) -> String {
+        let siteName = settings?.siteName ?? "NightGard"
+        let tagline = settings?.siteTagline ?? "Your Personal Web Portal"
+        let heroTitle = settings?.homeHeroTitle ?? "Your Personal Web Portal"
+        let heroSubtitle = settings?.homeHeroSubtitle ?? "Share your thoughts, stories, and ideas with the world."
+        let ctaText = settings?.homeCtaText ?? "Read the Blog"
+        let accentColor = settings?.accentColor ?? "#007AFF"
+        
+        // Logo HTML - only show if logo exists and useLogo is true
+        var logoHTML = ""
+        var headerContentHTML = ""
+        
+        if let settings = settings,
+           !settings.logoFileName.isEmpty,
+           FileManager.default.fileExists(atPath: (currentSiteFolder?.path ?? "") + "/images/" + settings.logoFileName) {
+            
+            logoHTML = """
+            <img src="/images/\(settings.logoFileName)" alt="\(siteName) Logo" class="site-logo">
+            """
+            
+            if settings.useLogo {
+                // Logo only, no company name
+                headerContentHTML = """
+                <div class="header-content">
+                    \(logoHTML)
+                </div>
+                """
+            } else {
+                // Logo + company name together
+                headerContentHTML = """
+                <div class="header-content">
+                    \(logoHTML)
+                    <h1>\(siteName)</h1>
+                </div>
+                """
+            }
+        } else {
+            // No logo, just company name
+            headerContentHTML = """
+            <div class="header-content">
+                <h1>\(siteName)</h1>
+            </div>
+            """
+        }
+        
         return """
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>NightGard - Home</title>
+            <title>\(siteName) - Home</title>
             <link rel="stylesheet" href="styles.css">
+            <style>
+                .header-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    margin-bottom: 20px;
+                }
+                .site-logo {
+                    height: 60px;
+                    width: auto;
+                }
+            </style>
         </head>
         <body>
             <div class="container">
                 <header>
-                    <h1>Welcome to NightGard</h1>
+                    \(headerContentHTML)
                     <nav>
                         <a href="index.html">Home</a>
                         <a href="blog.html">Blog</a>
@@ -96,14 +170,14 @@ class SiteManager {
                 
                 <main>
                     <section class="hero">
-                        <h2>Your Personal Web Portal</h2>
-                        <p>Share your thoughts, stories, and ideas with the world.</p>
-                        <a href="blog.html" class="cta-button">Read the Blog</a>
+                        <h2>\(heroTitle)</h2>
+                        <p>\(heroSubtitle)</p>
+                        <a href="blog.html" class="cta-button" style="background: \(accentColor);">\(ctaText)</a>
                     </section>
                 </main>
                 
                 <footer>
-                    <p>&copy; 2025 NightGard. All rights reserved.</p>
+                    <p>&copy; 2025 \(siteName). All rights reserved.</p>
                 </footer>
             </div>
         </body>

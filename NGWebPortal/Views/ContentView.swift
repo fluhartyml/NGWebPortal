@@ -39,5 +39,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [SiteSettings.self, BlogPost.self, PortfolioProject.self], inMemory: true)
+        .modelContainer(for: [BlogPost.self, PortfolioProject.self], inMemory: true)
 }

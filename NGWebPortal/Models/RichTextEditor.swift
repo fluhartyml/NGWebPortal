@@ -4,7 +4,6 @@
 //
 //  Native WYSIWYG rich text editor with formatting toolbar
 //
-// Ensure this file is included in your target for RichTextEditor to be available elsewhere.
 
 import SwiftUI
 import AppKit
@@ -59,11 +58,11 @@ public struct RichTextEditor: NSViewRepresentable {
     }
 }
 
-struct RichTextEditorView: View {
+public struct RichTextEditorView: View {
     @Binding var attributedText: NSAttributedString
     @State private var textView: NSTextView?
     
-    var body: some View {
+    public var body: some View {
         VStack(spacing: 0) {
             // Formatting Toolbar
             HStack(spacing: 16) {
@@ -143,7 +142,7 @@ struct RichTextEditorView: View {
             
             // Text Editor
             RichTextEditorWrapper(attributedText: $attributedText, textView: $textView)
-                .frame(maxHeight: CGFloat.greatestFiniteMagnitude) // Replaced .infinity with CGFloat.greatestFiniteMagnitude
+                .frame(maxHeight: CGFloat.greatestFiniteMagnitude)
         }
     }
     
@@ -217,11 +216,9 @@ struct RichTextEditorView: View {
         let line = (textView.string as NSString).substring(with: lineRange)
         
         if line.hasPrefix("• ") {
-            // Remove bullet
             let newLine = String(line.dropFirst(2))
             textView.replaceCharacters(in: lineRange, with: newLine)
         } else {
-            // Add bullet
             let newLine = "• " + line
             textView.replaceCharacters(in: lineRange, with: newLine)
         }
@@ -235,13 +232,10 @@ struct RichTextEditorView: View {
         let lineRange = (textView.string as NSString).lineRange(for: range)
         let line = (textView.string as NSString).substring(with: lineRange)
         
-        // Simple numbered list - just adds "1. " prefix
         if line.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
-            // Remove number
             let newLine = line.replacingOccurrences(of: #"^\d+\.\s"#, with: "", options: .regularExpression)
             textView.replaceCharacters(in: lineRange, with: newLine)
         } else {
-            // Add number
             let newLine = "1. " + line
             textView.replaceCharacters(in: lineRange, with: newLine)
         }
@@ -285,7 +279,6 @@ struct RichTextEditorView: View {
     }
 }
 
-// Helper wrapper to capture NSTextView reference
 struct RichTextEditorWrapper: NSViewRepresentable {
     @Binding var attributedText: NSAttributedString
     @Binding var textView: NSTextView?
@@ -340,8 +333,6 @@ struct RichTextEditorWrapper: NSViewRepresentable {
         }
     }
 }
-
-// MARK: - NSTextView Extensions
 
 extension NSTextView {
     func addFontTrait(_ trait: NSFontDescriptor.SymbolicTraits) {
