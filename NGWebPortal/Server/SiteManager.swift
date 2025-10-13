@@ -235,4 +235,23 @@ class SiteManager {
             print("❌ Failed to save blog post: \(error)")
         }
     }
+    
+    func savePortfolioProject(filename: String, html: String) {
+        guard let siteFolder = currentSiteFolder else {
+            print("❌ Site folder not available")
+            return
+        }
+        let portfolioFolder = siteFolder.appendingPathComponent("portfolio")
+        let fileManager = FileManager.default
+        do {
+            if !fileManager.fileExists(atPath: portfolioFolder.path) {
+                try fileManager.createDirectory(at: portfolioFolder, withIntermediateDirectories: true)
+            }
+            let fileURL = portfolioFolder.appendingPathComponent(filename)
+            try html.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("✅ Portfolio project saved: \(fileURL.path)")
+        } catch {
+            print("❌ Failed to save portfolio project: \(error)")
+        }
+    }
 }

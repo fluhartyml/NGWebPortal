@@ -28,7 +28,7 @@ struct ContentView: View {
                     Label("Blog", systemImage: "doc.text")
                 }
             
-            PortfolioEditorView()
+            PortfolioListView()
                 .tabItem {
                     Label("Portfolio", systemImage: "folder")
                 }
