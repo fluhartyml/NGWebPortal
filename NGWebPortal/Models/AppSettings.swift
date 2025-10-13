@@ -2,7 +2,7 @@
 //  AppSettings.swift
 //  NGWebPortal
 //
-//  Application settings and user preferences
+//  Global application settings and site-wide customization
 //
 
 import SwiftUI
@@ -10,12 +10,19 @@ import SwiftData
 
 @Model
 final class AppSettings {
-    // Site-Wide Settings
+    // Site Identity
     var siteName: String
     var siteTagline: String
     var authorName: String
+    
+    // Branding
+    var logoFileName: String
+    var useLogo: Bool
+    
+    // Colors
     var accentColor: String
     
+    // Computed properties for RGB sliders
     var accentColorRed: Double {
         get {
             Double(Color(hex: accentColor).cgColor?.components?[0] ?? 0.0)
@@ -74,22 +81,26 @@ final class AppSettings {
         siteName: String = "NG Web Portal",
         siteTagline: String = "Welcome to my website",
         authorName: String = "John Q Public",
+        logoFileName: String = "",
+        useLogo: Bool = false,
         accentColor: String = "#007AFF",
-        blogTitle: String = "blog",
-        blogTagline: String = "thoughts, stories, and ideas",
+        blogTitle: String = "Blog",
+        blogTagline: String = "Thoughts, stories, and ideas",
         homeHeroTitle: String = "Your Site, Your Way",
         homeHeroSubtitle: String = "Share your thoughts, stories, and ideas with the world.",
         homeCtaText: String = "Read the Blog",
         aboutTitle: String = "About Me",
         aboutContent: String = "This is your about page. Edit it to tell your story!",
         portfolioTitle: String = "Portfolio",
-        portfolioTagline: String = "My work and projects",
-        outputDirectory: String = "",
+        portfolioTagline: String = "Selected work and projects",
+        outputDirectory: String = "~/Library/Application Support/NGWebPortal/Sites/default",
         serverPort: Int = 8080
     ) {
         self.siteName = siteName
         self.siteTagline = siteTagline
         self.authorName = authorName
+        self.logoFileName = logoFileName
+        self.useLogo = useLogo
         self.accentColor = accentColor
         self.blogTitle = blogTitle
         self.blogTagline = blogTagline
@@ -106,31 +117,44 @@ final class AppSettings {
     }
 }
 
+// Color extension for hex conversion
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int = UInt64()
+        var int: UInt64 = 0
         Scanner(string: hex).scanHexInt64(&int)
-        let r, g, b: UInt64
+        let a, r, g, b: UInt64
         switch hex.count {
-        case 6:
-            (r, g, b) = ((int >> 16) & 0xFF, (int >> 8) & 0xFF, int & 0xFF)
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
         default:
-            (r, g, b) = (0, 122, 255) // fallback blue
+            (a, r, g, b) = (255, 0, 0, 0)
         }
         self.init(
             .sRGB,
             red: Double(r) / 255,
             green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: 1.0
+            blue:  Double(b) / 255,
+            opacity: Double(a) / 255
         )
     }
+    
     func toHexString() -> String {
-        let components = self.cgColor?.components ?? [0, 0, 0, 1]
-        let r = Int(components[0] * 255)
-        let g = Int(components[1] * 255)
-        let b = Int(components[2] * 255)
-        return String(format: "#%02X%02X%02X", r, g, b)
+        guard let components = self.cgColor?.components, components.count >= 3 else {
+            return "#007AFF"
+        }
+        
+        let r = Float(components[0])
+        let g = Float(components[1])
+        let b = Float(components[2])
+        
+        return String(format: "#%02lX%02lX%02lX",
+                     lroundf(r * 255),
+                     lroundf(g * 255),
+                     lroundf(b * 255))
     }
 }

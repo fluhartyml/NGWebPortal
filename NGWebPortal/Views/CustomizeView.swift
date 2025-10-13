@@ -2,612 +2,379 @@
 //  CustomizeView.swift
 //  NGWebPortal
 //
-//  Complete site customization interface
+//  Site customization interface for theme and content settings
 //
 
 import SwiftUI
 import SwiftData
+import AppKit
+import UniformTypeIdentifiers
 
 struct CustomizeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var appSettings: [AppSettings]
     @Query private var allPosts: [BlogPost]
     
-    private var currentSettings: AppSettings {
-        if let settings = appSettings.first {
-            return settings
-        } else {
-            let newSettings = AppSettings()
-            modelContext.insert(newSettings)
-            try? modelContext.save()
-            return newSettings
-        }
-    }
-    
     @State private var siteName: String = ""
-    @State private var siteTagline: String = ""
-    @State private var accentColor: Color = .blue
-    @State private var selectedTab: SettingsTab = .general
+    @State private var tagline: String = ""
+    @State private var authorName: String = ""
+    @State private var useLogo: Bool = false
+    @State private var logoFileName: String = ""
+    @State private var logoImage: NSImage?
+    @State private var accentColorRed: Double = 0.0
+    @State private var accentColorGreen: Double = 0.478
+    @State private var accentColorBlue: Double = 1.0
+    @State private var blogTitle: String = ""
+    @State private var blogTagline: String = ""
+    @State private var homeHeroTitle: String = ""
+    @State private var homeHeroSubtitle: String = ""
+    @State private var homeCtaText: String = ""
+    @State private var aboutTitle: String = ""
+    @State private var aboutContent: String = ""
+    @State private var portfolioTitle: String = ""
+    @State private var portfolioTagline: String = ""
+    @State private var showingSavedAlert = false
     
-    enum SettingsTab: String, CaseIterable {
-        case general = "General"
-        case home = "Home Page"
-        case blog = "Blog"
-        case about = "About"
-        case portfolio = "Portfolio"
+    var currentAppSettings: AppSettings? {
+        return appSettings.first
     }
     
     var body: some View {
-        HSplitView {
-            // Sidebar
-            List(SettingsTab.allCases, id: \.self, selection: $selectedTab) { tab in
-                Label(tab.rawValue, systemImage: iconForTab(tab))
-            }
-            .listStyle(.sidebar)
-            .frame(minWidth: 180, idealWidth: 200)
-            
-            // Content Area
-            ScrollView {
-                VStack(alignment: .leading, spacing: 30) {
-                    switch selectedTab {
-                    case .general:
-                        generalSettings
-                    case .home:
-                        homePageSettings
-                    case .blog:
-                        blogSettings
-                    case .about:
-                        aboutPageSettings
-                    case .portfolio:
-                        portfolioSettings
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Customize Your Site")
+                    .font(.largeTitle)
+                    .bold()
+                    .padding(.bottom, 10)
+                
+                // MARK: - Branding Section
+                GroupBox("Branding") {
+                    VStack(alignment: .leading, spacing: 15) {
+                        TextField("Site Name:", text: $siteName)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        TextField("Tagline:", text: $tagline)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        TextField("Author Name:", text: $authorName)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        Divider()
+                        
+                        Toggle("Use Logo Instead of Site Name", isOn: $useLogo)
+                            .toggleStyle(.switch)
+                        
+                        if useLogo {
+                            VStack(alignment: .leading, spacing: 10) {
+                                // Logo Preview
+                                if let image = logoImage {
+                                    HStack {
+                                        Image(nsImage: image)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(height: 80)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                        
+                                        Spacer()
+                                        
+                                        Button("Remove Logo") {
+                                            logoImage = nil
+                                            logoFileName = ""
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .tint(.red)
+                                    }
+                                } else {
+                                    // No logo yet
+                                    HStack {
+                                        Image(systemName: "photo.badge.plus")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.gray)
+                                            .frame(width: 80, height: 80)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                        
+                                        Text("No logo selected")
+                                            .foregroundColor(.secondary)
+                                        
+                                        Spacer()
+                                    }
+                                }
+                                
+                                Button("Choose Logo Image...") {
+                                    selectLogoImage()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                
+                                Text("Logo will appear in header, footer, and as favicon. Recommended: Square image, 512x512px or larger.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.top, 5)
+                        }
                     }
+                    .padding()
                 }
-                .padding(40)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // MARK: - Colors Section
+                GroupBox("Colors") {
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("Accent Color")
+                            .font(.headline)
+                        
+                        HStack {
+                            Rectangle()
+                                .fill(Color(red: accentColorRed, green: accentColorGreen, blue: accentColorBlue))
+                                .frame(width: 60, height: 60)
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("R:")
+                                        .frame(width: 20)
+                                    Slider(value: $accentColorRed, in: 0...1)
+                                    Text("\(Int(accentColorRed * 255))")
+                                        .frame(width: 35)
+                                }
+                                HStack {
+                                    Text("G:")
+                                        .frame(width: 20)
+                                    Slider(value: $accentColorGreen, in: 0...1)
+                                    Text("\(Int(accentColorGreen * 255))")
+                                        .frame(width: 35)
+                                }
+                                HStack {
+                                    Text("B:")
+                                        .frame(width: 20)
+                                    Slider(value: $accentColorBlue, in: 0...1)
+                                    Text("\(Int(accentColorBlue * 255))")
+                                        .frame(width: 35)
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                
+                // MARK: - Blog Settings
+                GroupBox("Blog") {
+                    VStack(alignment: .leading, spacing: 15) {
+                        TextField("Blog Title:", text: $blogTitle)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        TextField("Blog Tagline:", text: $blogTagline)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    .padding()
+                }
+                
+                // MARK: - Home Page Settings
+                GroupBox("Home Page") {
+                    VStack(alignment: .leading, spacing: 15) {
+                        TextField("Hero Title:", text: $homeHeroTitle)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        TextField("Hero Subtitle:", text: $homeHeroSubtitle)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        TextField("Call-to-Action Button:", text: $homeCtaText)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    .padding()
+                }
+                
+                // MARK: - About Page Settings
+                GroupBox("About Page") {
+                    VStack(alignment: .leading, spacing: 15) {
+                        TextField("About Title:", text: $aboutTitle)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        Text("About Content:")
+                            .font(.headline)
+                        
+                        TextEditor(text: $aboutContent)
+                            .frame(height: 120)
+                            .font(.system(.body, design: .default))
+                            .border(Color.gray.opacity(0.3), width: 1)
+                    }
+                    .padding()
+                }
+                
+                // MARK: - Portfolio Settings
+                GroupBox("Portfolio") {
+                    VStack(alignment: .leading, spacing: 15) {
+                        TextField("Portfolio Title:", text: $portfolioTitle)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        TextField("Portfolio Tagline:", text: $portfolioTagline)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    .padding()
+                }
+                
+                // MARK: - Save Button
+                HStack {
+                    Spacer()
+                    
+                    Button("Save All Changes") {
+                        saveSettings()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                .padding(.top, 20)
             }
+            .padding()
         }
         .onAppear {
             loadSettings()
         }
-    }
-    
-    // MARK: - General Settings
-    
-    private var generalSettings: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("General Settings")
-                .font(.largeTitle)
-                .bold()
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 15) {
-                Text("Site Identity")
-                    .font(.headline)
-                
-                TextField("Site Name", text: $siteName)
-                    .textFieldStyle(.roundedBorder)
-                
-                TextField("Site Tagline", text: $siteTagline)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            VStack(alignment: .leading, spacing: 15) {
-                Text("Theme")
-                    .font(.headline)
-                
-                ColorPicker("Accent Color", selection: $accentColor)
-            }
-            
-            Spacer()
-            
-            HStack {
-                Button("Save Changes") {
-                    saveSettings()
-                }
-                .buttonStyle(.borderedProminent)
-                
-                Button("Reset to Defaults") {
-                    resetToDefaults()
-                }
-                .buttonStyle(.bordered)
-            }
+        .alert("Settings Saved", isPresented: $showingSavedAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Your settings have been saved. Restart the server to see changes.")
         }
     }
     
-    // MARK: - Home Page Settings
-    
-    private var homePageSettings: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Home Page")
-                .font(.largeTitle)
-                .bold()
+    // MARK: - Load Settings
+    func loadSettings() {
+        guard let settings = currentAppSettings else {
+            // Create default settings if none exist
+            let newSettings = AppSettings()
+            modelContext.insert(newSettings)
+            try? modelContext.save()
             
-            Divider()
+            siteName = newSettings.siteName
+            tagline = newSettings.siteTagline
+            authorName = newSettings.authorName
+            useLogo = newSettings.useLogo
+            logoFileName = newSettings.logoFileName
+            accentColorRed = newSettings.accentColorRed
+            accentColorGreen = newSettings.accentColorGreen
+            accentColorBlue = newSettings.accentColorBlue
+            blogTitle = newSettings.blogTitle
+            blogTagline = newSettings.blogTagline
+            homeHeroTitle = newSettings.homeHeroTitle
+            homeHeroSubtitle = newSettings.homeHeroSubtitle
+            homeCtaText = newSettings.homeCtaText
+            aboutTitle = newSettings.aboutTitle
+            aboutContent = newSettings.aboutContent
+            portfolioTitle = newSettings.portfolioTitle
+            portfolioTagline = newSettings.portfolioTagline
             
-            Text("Configure your home page layout and content")
-                .foregroundColor(.secondary)
-            
-            Spacer()
+            loadLogoImage()
+            return
         }
-    }
-    
-    // MARK: - Blog Settings
-    
-    private var blogSettings: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Blog Settings")
-                .font(.largeTitle)
-                .bold()
-            
-            Divider()
-            
-            Text("Configure your blog appearance and behavior")
-                .foregroundColor(.secondary)
-            
-            Spacer()
-        }
-    }
-    
-    // MARK: - About Page Settings
-    
-    private var aboutPageSettings: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("About Page")
-                .font(.largeTitle)
-                .bold()
-            
-            Divider()
-            
-            Text("Customize your about page")
-                .foregroundColor(.secondary)
-            
-            Spacer()
-        }
-    }
-    
-    // MARK: - Portfolio Settings
-    
-    private var portfolioSettings: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Portfolio Settings")
-                .font(.largeTitle)
-                .bold()
-            
-            Divider()
-            
-            Text("Configure your portfolio display")
-                .foregroundColor(.secondary)
-            
-            Spacer()
-        }
-    }
-    
-    // MARK: - Helper Functions
-    
-    private func iconForTab(_ tab: SettingsTab) -> String {
-        switch tab {
-        case .general: return "gearshape"
-        case .home: return "house"
-        case .blog: return "doc.text"
-        case .about: return "person"
-        case .portfolio: return "folder"
-        }
-    }
-    
-    private func loadSettings() {
-        let settings = currentSettings
+        
         siteName = settings.siteName
-        siteTagline = settings.siteTagline
-        accentColor = Color(
-            red: settings.accentColorRed,
-            green: settings.accentColorGreen,
-            blue: settings.accentColorBlue
-        )
+        tagline = settings.siteTagline
+        authorName = settings.authorName
+        useLogo = settings.useLogo
+        logoFileName = settings.logoFileName
+        accentColorRed = settings.accentColorRed
+        accentColorGreen = settings.accentColorGreen
+        accentColorBlue = settings.accentColorBlue
+        blogTitle = settings.blogTitle
+        blogTagline = settings.blogTagline
+        homeHeroTitle = settings.homeHeroTitle
+        homeHeroSubtitle = settings.homeHeroSubtitle
+        homeCtaText = settings.homeCtaText
+        aboutTitle = settings.aboutTitle
+        aboutContent = settings.aboutContent
+        portfolioTitle = settings.portfolioTitle
+        portfolioTagline = settings.portfolioTagline
+        
+        loadLogoImage()
     }
     
-    private func saveSettings() {
-        let settings = currentSettings
+    // MARK: - Load Logo Image
+    func loadLogoImage() {
+        guard !logoFileName.isEmpty else {
+            logoImage = nil
+            return
+        }
+        
+        let imagesPath = (currentAppSettings?.outputDirectory as NSString?)?.expandingTildeInPath ?? ""
+        let logoPath = (imagesPath as NSString).appendingPathComponent("images/\(logoFileName)")
+        
+        if FileManager.default.fileExists(atPath: logoPath) {
+            logoImage = NSImage(contentsOfFile: logoPath)
+        }
+    }
+    
+    // MARK: - Select Logo Image
+    func selectLogoImage() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Logo Image"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.png, .jpeg, .heic]
+        panel.message = "Select an image to use as your site logo"
+        
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                copyLogoToSite(from: url)
+            }
+        }
+    }
+    
+    // MARK: - Copy Logo to Site
+    func copyLogoToSite(from sourceURL: URL) {
+        guard let settings = currentAppSettings else { return }
+        
+        let imagesDir = (settings.outputDirectory as NSString).expandingTildeInPath + "/images"
+        let fileName = "logo-\(UUID().uuidString).\(sourceURL.pathExtension)"
+        let destinationPath = (imagesDir as NSString).appendingPathComponent(fileName)
+        
+        do {
+            // Ensure images directory exists
+            try FileManager.default.createDirectory(atPath: imagesDir, withIntermediateDirectories: true)
+            
+            // Copy file
+            try FileManager.default.copyItem(atPath: sourceURL.path, toPath: destinationPath)
+            
+            // Update state
+            logoFileName = fileName
+            logoImage = NSImage(contentsOfFile: destinationPath)
+            
+        } catch {
+            print("Error copying logo: \(error)")
+        }
+    }
+    
+    // MARK: - Save Settings
+    func saveSettings() {
+        guard let settings = currentAppSettings else { return }
+        
+        // Update all settings
         settings.siteName = siteName
-        settings.siteTagline = siteTagline
+        settings.siteTagline = tagline
+        settings.authorName = authorName
+        settings.useLogo = useLogo
+        settings.logoFileName = logoFileName
+        settings.accentColorRed = accentColorRed
+        settings.accentColorGreen = accentColorGreen
+        settings.accentColorBlue = accentColorBlue
+        settings.blogTitle = blogTitle
+        settings.blogTagline = blogTagline
+        settings.homeHeroTitle = homeHeroTitle
+        settings.homeHeroSubtitle = homeHeroSubtitle
+        settings.homeCtaText = homeCtaText
+        settings.aboutTitle = aboutTitle
+        settings.aboutContent = aboutContent
+        settings.portfolioTitle = portfolioTitle
+        settings.portfolioTagline = portfolioTagline
         
-        let components = accentColor.cgColor?.components ?? [0, 0, 0, 1]
-        settings.accentColorRed = components[0]
-        settings.accentColorGreen = components[1]
-        settings.accentColorBlue = components[2]
-        
+        // Save to database
         try? modelContext.save()
         
-        // Regenerate entire site with new settings
-        regenerateAllPages()
-    }
-    
-    private func resetToDefaults() {
-        siteName = "My Website"
-        siteTagline = "Welcome to my site"
-        accentColor = .blue
-    }
-    
-    private func regenerateAllPages() {
-        guard let siteFolder = SiteManager.shared.currentSiteFolder else {
-            print("❌ Site folder not available")
-            return
-        }
-        
-        let fileManager = FileManager.default
-        
-        // Regenerate all blog posts with new accent color
-        let blogFolder = siteFolder.appendingPathComponent("blog")
-        do {
-            try fileManager.createDirectory(at: blogFolder, withIntermediateDirectories: true)
-        } catch {
-            print("❌ Failed to create blog folder: \(error)")
-            return
-        }
-        
-        for post in allPosts where !post.isDraft {
-            let html = generateBlogPostHTML(post: post)
-            let filename = post.filename
-            let postURL = blogFolder.appendingPathComponent("\(filename).html")
-            do {
-                try html.write(to: postURL, atomically: true, encoding: .utf8)
-            } catch {
-                print("❌ Failed to write blog post \(filename): \(error)")
-            }
-        }
-        
-        // Regenerate blog list page
-        let blogListHTML = generateBlogListHTML()
-        let blogListURL = siteFolder.appendingPathComponent("blog.html")
-        do {
-            try blogListHTML.write(to: blogListURL, atomically: true, encoding: .utf8)
-        } catch {
-            print("❌ Failed to write blog list: \(error)")
-        }
-        
-        print("✅ Regenerated entire site with new settings")
-    }
-    
-    private func generateBlogPostHTML(post: BlogPost) -> String {
-        let accentHex = accentColor.toHex()
-        
-        var imageHTML = ""
-        if let imageData = post.featuredImageData {
-            let base64String = imageData.base64EncodedString()
-            imageHTML = """
-            <div class="featured-image">
-                <img src="data:image/jpeg;base64,\(base64String)" alt="\(post.title)">
-            </div>
-            """
-        }
-        
-        return """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>\(post.title) - \(siteName)</title>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    background: #fff;
-                }
-                
-                header {
-                    background: \(accentHex);
-                    color: white;
-                    padding: 2rem;
-                    text-align: center;
-                }
-                
-                header h1 {
-                    font-size: 2.5rem;
-                    margin-bottom: 0.5rem;
-                }
-                
-                nav {
-                    display: flex;
-                    gap: 2rem;
-                    justify-content: center;
-                    margin-top: 1rem;
-                }
-                
-                nav a {
-                    color: white;
-                    text-decoration: none;
-                    font-weight: 500;
-                }
-                
-                nav a:hover {
-                    text-decoration: underline;
-                }
-                
-                .container {
-                    max-width: 800px;
-                    margin: 3rem auto;
-                    padding: 0 2rem;
-                }
-                
-                .featured-image {
-                    margin-bottom: 2rem;
-                    border-radius: 8px;
-                    overflow: hidden;
-                }
-                
-                .featured-image img {
-                    width: 100%;
-                    height: auto;
-                    display: block;
-                }
-                
-                h2 {
-                    font-size: 2.5rem;
-                    margin-bottom: 1rem;
-                    color: \(accentHex);
-                }
-                
-                .subtitle {
-                    font-size: 1.25rem;
-                    color: #666;
-                    margin-bottom: 2rem;
-                    font-style: italic;
-                }
-                
-                .content {
-                    font-size: 1.125rem;
-                    line-height: 1.8;
-                }
-                
-                .content p {
-                    margin-bottom: 1.5rem;
-                }
-                
-                .back-link {
-                    display: inline-block;
-                    margin-top: 3rem;
-                    color: \(accentHex);
-                    text-decoration: none;
-                    font-weight: 500;
-                }
-                
-                .back-link:hover {
-                    text-decoration: underline;
-                }
-                
-                footer {
-                    text-align: center;
-                    padding: 2rem;
-                    background: #f5f5f5;
-                    margin-top: 4rem;
-                }
-            </style>
-        </head>
-        <body>
-            <header>
-                <h1>\(siteName)</h1>
-                <p>\(siteTagline)</p>
-                <nav>
-                    <a href="/index.html">Home</a>
-                    <a href="/blog/index.html">Blog</a>
-                    <a href="/about.html">About</a>
-                    <a href="/portfolio.html">Portfolio</a>
-                </nav>
-            </header>
-            <div class="container">
-                \(imageHTML)
-                <h2>\(post.title)</h2>
-                <p class="subtitle">\(post.subtitle)</p>
-                <div class="content">
-                    \(post.content)
-                </div>
-                <a href="/blog/index.html" class="back-link">← Back to Blog</a>
-            </div>
-            <footer>
-                <p>&copy; 2025 \(siteName). Powered by NG Web Portal</p>
-            </footer>
-        </body>
-        </html>
-        """
-    }
-    
-    private func generateBlogListHTML() -> String {
-        let accentHex = accentColor.toHex()
-        let publishedPosts = allPosts.filter { !$0.isDraft }.sorted { $0.publishedDate > $1.publishedDate }
-        
-        let postsHTML = publishedPosts.map { post in
-            var imageHTML = ""
-            if let imageData = post.featuredImageData {
-                let base64String = imageData.base64EncodedString()
-                imageHTML = """
-                <img src="data:image/jpeg;base64,\(base64String)" alt="\(post.title)">
-                """
-            }
-            
-            return """
-            <article class="post-card">
-                <div class="post-image">
-                    \(imageHTML)
-                </div>
-                <div class="post-content">
-                    <h2><a href="\(post.filename).html">\(post.title)</a></h2>
-                    <p class="post-subtitle">\(post.subtitle)</p>
-                    <a href="\(post.filename).html" class="read-more">Read More →</a>
-                </div>
-            </article>
-            """
-        }.joined(separator: "\n")
-        
-        return """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Blog - \(siteName)</title>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    line-height: 1.6;
-                    color: #333;
-                    background: #fff;
-                }
-                
-                header {
-                    background: \(accentHex);
-                    color: white;
-                    padding: 2rem;
-                    text-align: center;
-                }
-                
-                header h1 {
-                    font-size: 2.5rem;
-                    margin-bottom: 0.5rem;
-                }
-                
-                nav {
-                    display: flex;
-                    gap: 2rem;
-                    justify-content: center;
-                    margin-top: 1rem;
-                }
-                
-                nav a {
-                    color: white;
-                    text-decoration: none;
-                    font-weight: 500;
-                }
-                
-                nav a:hover {
-                    text-decoration: underline;
-                }
-                
-                .container {
-                    max-width: 1200px;
-                    margin: 3rem auto;
-                    padding: 0 2rem;
-                }
-                
-                .posts-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-                    gap: 2rem;
-                }
-                
-                .post-card {
-                    background: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    transition: transform 0.2s, box-shadow 0.2s;
-                }
-                
-                .post-card:hover {
-                    transform: translateY(-4px);
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                }
-                
-                .post-image {
-                    width: 100%;
-                    height: 200px;
-                    overflow: hidden;
-                    background: #f5f5f5;
-                }
-                
-                .post-image img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                }
-                
-                .post-content {
-                    padding: 1.5rem;
-                }
-                
-                .post-content h2 {
-                    font-size: 1.5rem;
-                    margin-bottom: 0.5rem;
-                }
-                
-                .post-content h2 a {
-                    color: #333;
-                    text-decoration: none;
-                }
-                
-                .post-content h2 a:hover {
-                    color: \(accentHex);
-                }
-                
-                .post-subtitle {
-                    color: #666;
-                    margin-bottom: 1rem;
-                    font-size: 0.95rem;
-                }
-                
-                .read-more {
-                    color: \(accentHex);
-                    text-decoration: none;
-                    font-weight: 500;
-                }
-                
-                .read-more:hover {
-                    text-decoration: underline;
-                }
-                
-                footer {
-                    text-align: center;
-                    padding: 2rem;
-                    background: #f5f5f5;
-                    margin-top: 4rem;
-                }
-            </style>
-        </head>
-        <body>
-            <header>
-                <h1>\(siteName)</h1>
-                <p>\(siteTagline)</p>
-                <nav>
-                    <a href="/index.html">Home</a>
-                    <a href="/blog/index.html">Blog</a>
-                    <a href="/about.html">About</a>
-                    <a href="/portfolio.html">Portfolio</a>
-                </nav>
-            </header>
-            <div class="container">
-                <div class="posts-grid">
-                    \(postsHTML)
-                </div>
-            </div>
-            <footer>
-                <p>&copy; 2025 \(siteName). Powered by NG Web Portal</p>
-            </footer>
-        </body>
-        </html>
-        """
-    }
-}
-
-extension Color {
-    func toHex() -> String {
-        let components = self.cgColor?.components ?? [0, 0, 0, 1]
-        let r = Int(components[0] * 255.0)
-        let g = Int(components[1] * 255.0)
-        let b = Int(components[2] * 255.0)
-        return String(format: "#%02X%02X%02X", r, g, b)
+        showingSavedAlert = true
     }
 }
 
@@ -615,4 +382,3 @@ extension Color {
     CustomizeView()
         .modelContainer(for: [AppSettings.self, BlogPost.self])
 }
-
