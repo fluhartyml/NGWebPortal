@@ -4,6 +4,8 @@
 //
 //  Portfolio project editor with WYSIWYG rich text editing
 //
+//  ⏰ ARTIFACT GENERATED: 2025 OCT 13 20:42
+//  🔑 VERSION: TIMESTAMPED-FRESH
 
 import SwiftUI
 import SwiftData
@@ -133,6 +135,7 @@ struct PortfolioEditorView: View {
             }
             .padding()
         }
+        .background(Color(NSColor.windowBackgroundColor))
         .navigationTitle(project.title.isEmpty ? "New Project" : project.title)
         .fileImporter(
             isPresented: $showingImagePicker,
