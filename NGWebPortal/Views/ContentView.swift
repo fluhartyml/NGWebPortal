@@ -2,38 +2,45 @@
 //  ContentView.swift
 //  NGWebPortal
 //
-//  Main window with tabbed navigation for all features
+//  Main Sysop Console and Waiting For Caller Screen
 //
+//  ⏰ ARTIFACT GENERATED: 2025 OCT 13 19:53
+//  🔑 VERSION: TIMESTAMPED-FRESH
 
 import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @State private var server = WebServer()
+    @Environment(\.modelContext) var modelContext
+    @State private var selectedTab = 0
     
     var body: some View {
-        TabView {
-            ServerView(server: server)
+        TabView(selection: $selectedTab) {
+            Text("Server View - Coming Soon")
                 .tabItem {
-                    Label("Server", systemImage: "server.rack")
+                    Label("Server", systemImage: "globe")
                 }
+                .tag(0)
             
             CustomizeView()
                 .tabItem {
                     Label("Customize", systemImage: "paintbrush")
                 }
+                .tag(1)
             
             BlogEditorView()
                 .tabItem {
                     Label("Blog", systemImage: "doc.text")
                 }
+                .tag(2)
             
             PortfolioListView()
                 .tabItem {
                     Label("Portfolio", systemImage: "folder")
                 }
+                .tag(3)
         }
-        .frame(minWidth: 800, minHeight: 600)
+        .frame(minWidth: 900, minHeight: 600)
     }
 }
 
